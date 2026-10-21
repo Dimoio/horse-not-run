@@ -186,7 +186,116 @@ function dlExp(){
 function cpExp(){var ta=$('expA');ta.select();ta.setSelectionRange(0,999999);try{document.execCommand('copy');alert('已复制');}catch(e){alert('请长按手动复制')}}
 function impSave(){var f=ce('input');f.type='file';f.accept='.json,application/json';f.onchange=function(e){var file=e.target.files[0];if(!file)return;var r=new FileReader();r.onload=function(ev){doImp(ev.target.result)};r.readAsText(file)};f.click()}
 function pickFile(){var f=$('impFile');f.onchange=function(e){var file=e.target.files[0];if(!file)return;var r=new FileReader();r.onload=function(ev){$('impA').value=ev.target.result};r.readAsText(file)};f.click()}
-function doImp(t){if(!confirm('⚠️ 警告：导入存档将完全覆盖当前的所有马匹、胡萝卜和进度！\n确定要读取该文件吗？'))return;try{var d=JSON.parse(t);if(!d.c)throw new Error('无效的存档文件');S.c=d.c||[];S.a=d.a||[];S.d=d.d||{};S.r=d.r!=null?d.r:20;S.p={m:0,v:0,i:0,fire:0,dispel:0};if(d.p){if(d.p.m!==undefined)S.p.m=d.p.m;if(d.p.v!==undefined)S.p.v=d.p.v;if(d.p.i!==undefined)S.p.i=d.p.i;if(d.p.fire!==undefined)S.p.fire=d.p.fire;if(d.p.dispel!==undefined)S.p.dispel=d.p.dispel;}S.points=d.points||0;S.st=d.st||[];S.stT=d.stT||0;S.stud=d.stud||null;S.studL=d.studL||0;S.studT=d.studT||0;S.studN=d.studN||0;S.ach=d.ach||{};S.cap=d.cap||50;if(S.cap>CAPMAX)S.cap=CAPMAX;S.head=d.head||null;S.headStart=d.headStart||0;S.headRace=d.headRace||0;S.sel=[];for(var i=0;i<S.c.length;i++){if(S.c[i].name===undefined)S.c[i].name='';if(S.c[i].hasBeenStud===undefined)S.c[i].hasBeenStud=false;if(S.c[i].trainSpeed===undefined)S.c[i].trainSpeed=0;if(S.c[i].trained===undefined)S.c[i].trained=false;if(S.c[i].pie===undefined)S.c[i].pie=false;if(S.c[i].pieColor===undefined)S.c[i].pieColor='w';if(S.c[i].firefly===undefined)S.c[i].firefly=false;if(S.c[i].induceHerm===undefined)S.c[i].induceHerm=false;if(S.c[i].sterile===undefined)S.c[i].sterile=false;if(S.c[i].doubleWomb===undefined)S.c[i].doubleWomb=false;if(!S.c[i].g.wingCol)S.c[i].g.wingCol=pk(CK);if(!S.c[i].g.tailCol)S.c[i].g.tailCol=pk(CK)}for(var j=0;j<S.a.length;j++){if(S.a[j].name===undefined)S.a[j].name='';if(S.a[j].hasBeenStud===undefined)S.a[j].hasBeenStud=false;if(S.a[j].trainSpeed===undefined)S.a[j].trainSpeed=0;if(S.a[j].trained===undefined)S.a[j].trained=false;if(S.a[j].pie===undefined)S.a[j].pie=false;if(S.a[j].pieColor===undefined)S.a[j].pieColor='w';if(S.a[j].firefly===undefined)S.a[j].firefly=false;if(S.a[j].induceHerm===undefined)S.a[j].induceHerm=false;if(S.a[j].sterile===undefined)S.a[j].sterile=false;if(S.a[j].doubleWomb===undefined)S.a[j].doubleWomb=false;if(!S.a[j].g.wingCol)S.a[j].g.wingCol=pk(CK);if(!S.a[j].g.tailCol)S.a[j].g.tailCol=pk(CK)}sv();closeM();render();alert('✅ 存档导入成功！');}catch(e){alert('❌ 导入失败：'+e.message)}}
+function doImp(t){
+  if(!confirm('⚠️ 警告：导入存档将完全覆盖当前的所有马匹、胡萝卜和进度！\n确定要读取该文件吗？'))return;
+  try{
+    var d=JSON.parse(t);
+    if(!d.c)throw new Error('无效的存档文件');
+    
+    // 基础数据
+    S.c=d.c||[];
+    S.a=d.a||[];
+    S.d=d.d||{};
+    S.r=d.r!=null?d.r:20;
+    S.farmName=d.farmName||'我的马场';
+    S.points=d.points||0;
+    S.cap=d.cap||50;
+    S.ach=d.ach||{};
+    
+    // 商店与时间
+    S.st=d.st||[];
+    S.stT=d.stT||0;
+    S.st00T=d.st00T||S.stT||0;
+    S.unlocked00=d.unlocked00||false;
+    
+    // 00 商店进度
+    S.hoof=d.hoof||0;
+    S.trainCount=d.trainCount!==undefined?d.trainCount:1;
+    S.hoofSubmitted=d.hoofSubmitted||[false,false,false,false,false];
+    S.trainFail=d.trainFail||0;
+    S.trainSuccess=d.trainSuccess||0;
+    
+    // 药剂仓库
+    S.p = d.p || {m:0,v:0,i:0,fire:0,dispel:0,hfan:0,hfeng:0,hmix:0,hdrag:0,hnight:0};
+    if(S.p.hfan===undefined)S.p.hfan=0;
+    if(S.p.hfeng===undefined)S.p.hfeng=0;
+    if(S.p.hmix===undefined)S.p.hmix=0;
+    if(S.p.hdrag===undefined)S.p.hdrag=0;
+    if(S.p.hnight===undefined)S.p.hnight=0;
+    
+    // 种马
+    S.stud=d.stud||null;
+    S.studL=d.studL||0;
+    S.studT=d.studT||0;
+    S.studN=d.studN||0;
+    
+    // 头马
+    S.head=d.head||null;
+    S.headStart=d.headStart||0;
+    S.headRace=d.headRace||0;
+    S.headTerm=d.headTerm||0;
+    S.headRaceCount=d.headRaceCount||0;
+    S.headLastTick=d.headLastTick||0;
+    
+    S.sel=[];
+    
+    // 遍历马匹补齐缺失字段（终极兜底防报错）
+    for(var i=0;i<S.c.length;i++){
+      if(!S.c[i].id) S.c[i].id = uid();
+      if(!S.c[i].g) S.c[i].g = rg(); // 如果没有基因，随机生成一套
+      if(!S.c[i].g.col) S.c[i].g.col = pk(CK);
+      if(!S.c[i].g.wingCol) S.c[i].g.wingCol = pk(CK);
+      if(!S.c[i].g.tailCol) S.c[i].g.tailCol = pk(CK);
+      if(!S.c[i].g.win) S.c[i].g.win = pk(P.win.o).k;
+      if(!S.c[i].g.leg) S.c[i].g.leg = pk(P.leg.o).k;
+      if(!S.c[i].g.bod) S.c[i].g.bod = pk(P.bod.o).k;
+      if(!S.c[i].g.hor) S.c[i].g.hor = pk(P.hor.o).k;
+      if(!S.c[i].g.tai) S.c[i].g.tai = pk(P.tai.o).k;
+      if(!S.c[i].g.eye) S.c[i].g.eye = pk(P.eye.o).k;
+      if(S.c[i].name===undefined)S.c[i].name='';
+      if(S.c[i].hasBeenStud===undefined)S.c[i].hasBeenStud=false;
+      if(S.c[i].trainSpeed===undefined)S.c[i].trainSpeed=0;
+      if(S.c[i].trained===undefined)S.c[i].trained=false;
+      if(S.c[i].pie===undefined)S.c[i].pie=false;
+      if(S.c[i].pieColor===undefined)S.c[i].pieColor='w';
+      if(S.c[i].firefly===undefined)S.c[i].firefly=false;
+      if(S.c[i].induceHerm===undefined)S.c[i].induceHerm=false;
+      if(S.c[i].sterile===undefined)S.c[i].sterile=false;
+      if(S.c[i].doubleWomb===undefined)S.c[i].doubleWomb=false;
+    }
+    
+    for(var j=0;j<S.a.length;j++){
+      if(!S.a[j].id) S.a[j].id = uid();
+      if(!S.a[j].g) S.a[j].g = rg();
+      if(!S.a[j].g.col) S.a[j].g.col = pk(CK);
+      if(!S.a[j].g.wingCol) S.a[j].g.wingCol = pk(CK);
+      if(!S.a[j].g.tailCol) S.a[j].g.tailCol = pk(CK);
+      if(!S.a[j].g.win) S.a[j].g.win = pk(P.win.o).k;
+      if(!S.a[j].g.leg) S.a[j].g.leg = pk(P.leg.o).k;
+      if(!S.a[j].g.bod) S.a[j].g.bod = pk(P.bod.o).k;
+      if(!S.a[j].g.hor) S.a[j].g.hor = pk(P.hor.o).k;
+      if(!S.a[j].g.tai) S.a[j].g.tai = pk(P.tai.o).k;
+      if(!S.a[j].g.eye) S.a[j].g.eye = pk(P.eye.o).k;
+      if(S.a[j].name===undefined)S.a[j].name='';
+      if(S.a[j].hasBeenStud===undefined)S.a[j].hasBeenStud=false;
+      if(S.a[j].trainSpeed===undefined)S.a[j].trainSpeed=0;
+      if(S.a[j].trained===undefined)S.a[j].trained=false;
+      if(S.a[j].pie===undefined)S.a[j].pie=false;
+      if(S.a[j].pieColor===undefined)S.a[j].pieColor='w';
+      if(S.a[j].firefly===undefined)S.a[j].firefly=false;
+      if(S.a[j].induceHerm===undefined)S.a[j].induceHerm=false;
+      if(S.a[j].sterile===undefined)S.a[j].sterile=false;
+      if(S.a[j].doubleWomb===undefined)S.a[j].doubleWomb=false;
+    }
+    
+    sv();
+    closeM();
+    render();
+    alert('✅ 存档导入成功！');
+  }catch(e){
+    alert('❌ 导入失败：'+e.message);
+  }
+}
 function mkHeadUI(){var box=$('headBox');if(!box)return;var sub=$('headSub');box.innerHTML='';if(!S.head){if(sub)sub.textContent='未设置';box.innerHTML='<div class="em">还没有头马。在马群里点 ⋯ → 设为首马。</div>';return}var c=findC(S.head);if(!c){S.head=null;if(sub)sub.textContent='未设置';box.innerHTML='<div class="em">头马丢失</div>';return}var speed=getSpeed(c);var bonus=headBonus(c);var charm=rSFull(c)+bonus;if(c.tempCharmBonus)charm+=c.tempCharmBonus;var si=SX[c.sx]||SX.m;if(sub)sub.textContent=(c.name||('第 '+c.gen+' 代'))+' · '+speed.toFixed(1)+'/20';var wrap=ce('div');wrap.className='head-card';wrap.appendChild(mkPB(c));var info=ce('div');info.className='head-info';var elapsed=Date.now()-S.headStart;var html='<div class="hn">'+(c.name||('第 '+c.gen+' 代'))+' '+si.s+' '+si.n+'</div>';html+='<div class="hrow">魅力值 '+charm+(bonus||c.tempCharmBonus?' <span style="color:#f1c40f">(+'+((bonus||0)+(c.tempCharmBonus||0))+')</span>':'')+'</div>';html+='<div class="hrow">速度 '+speed.toFixed(1)+' / 20</div>';if(!c.sterile){html+='<div class="hrow">剩余繁育 '+(getMaxBc(c)-c.bc)+' / '+getMaxBc(c)+'</div>'}else{html+='<div class="hrow" style="color:#e05a7a">不育（无需繁育）</div>'}if(c.tempCharmBonus)html+='<div class="hrow" style="color:#e05a7a; font-weight:bold;">🩸 红龙之血生效中</div>';if(c.induceHerm)html+='<div class="hrow" style="color:#ff8ac4">🍷 诱变魔药生效中</div>';if(c.tempBreed)html+='<div class="hrow" style="color:#a0e0a0">🌾 丰饶魔药生效中</div>';if(speed>=20){var frem=Math.max(0,HEAD_FORCE-elapsed);var fh=Math.floor(frem/3600000);var fm=Math.floor(frem%3600000/60000);html+='<div class="hrow" style="color:#e05a7a">强制归档倒计时 '+fh+'小时'+fm+'分</div>'}info.innerHTML=html;wrap.appendChild(info);box.appendChild(wrap);var pots=ce('div');pots.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px';if(S.p.m>0&&!c.mut&&!c.pie){var bm=ce('button');bm.className='primary';bm.style.cssText='flex:1;font-size:12px;padding:6px';bm.textContent='🌟 突变药水('+S.p.m+')';bm.onclick=function(){useP(c.id,'m')};pots.appendChild(bm)}if(c.sx!=='m'&&!c.induceHerm&&S.p.i>0){var bi=ce('button');bi.className='primary';bi.style.cssText='flex:1;font-size:12px;padding:6px;background:#c05a9a;border-color:#c05a9a';bi.textContent='🍷 诱变魔药('+S.p.i+')';bi.onclick=function(){useP(c.id,'i')};pots.appendChild(bi)}if(pots.children.length>0)box.appendChild(pots);var bw=ce('div');bw.className='head-actions';var rb=ce('button');rb.className='primary';var rc=Date.now()-S.headRace;var cd=getRaceCd(c);if(rc<cd){rb.disabled=true;var cs=Math.ceil((cd-rc)/1000);rb.textContent='比赛冷却 '+Math.floor(cs/60)+':'+String(cs%60).padStart(2,'0')}else{rb.textContent='🏇 去比赛！';rb.onclick=raceHead}bw.appendChild(rb);var ab=ce('button');ab.className='danger';var canArc=((c.sterile||c.bc>=getMaxBc(c))&&speed>=20);if(canArc){ab.textContent='📦 归档并更换头马';ab.onclick=function(){if(confirm('⚠️ 警告：\n归档后它将永久进入名人堂，无法再次担任头马，也无法繁育。\n确定要让它退役吗？')){archive(S.head)}}}else{ab.disabled=true;if(!c.sterile&&c.bc<getMaxBc(c))ab.textContent='需用尽所有繁育次数';else ab.textContent='需速度满 20'}bw.appendChild(ab);var mb=ce('button');mb.textContent='⋯';mb.onclick=function(){openMenu(S.head)};bw.appendChild(mb);box.appendChild(bw)}
 function render(){
   try {
