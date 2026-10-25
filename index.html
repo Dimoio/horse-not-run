@@ -1,5 +1,17 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+<script>
+  // 提前把主题 class 挂到 html 上
+  if (localStorage.getItem('wd_theme_mode') === 'light') {
+    document.documentElement.classList.add('light-mode-html');
+  }
+</script>
+<style>
+  /* 如果 html 带有 light-mode-html，直接在渲染的最初阶段铺满沙土色 */
+  html.light-mode-html, html.light-mode-html body {
+    background-color: #a38f73 !important;
+  }
+</style>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -19,9 +31,11 @@
 <div id="farmNameBox" style="text-align: center; font-size: 14px; color: #f1c40f; margin-top: 5px; margin-bottom: 5px; cursor: pointer; max-width: 80%; margin-left: auto; margin-right: auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" onclick="editFarmName()" title="点击修改马场名字">🏡 我的马场</div>
 <div class="tb">
   <span id="stat"></span>
+  <span id="globalClock" style="font-size:12px; color:#f0a04b; font-weight:bold; margin-right:8px;"></span>
   <button id="toggleModeBtn" onclick="toggleDisplayMode()" style="font-size:12px; padding:4px 8px; min-height:30px;">🔳 色块模式</button>
  <button id="svBtn">💾 存档选项</button>
  <button id="quickSvBtn" style="background:#2a3d2a; border-color:#4a7a4a; color:#a0e0a0;">⚡ 极速保存</button>
+<button id="themeBtn" onclick="toggleTheme()" style="font-size:12px; padding:4px 8px; min-height:30px;">🌙 切换夜晚</button>
 </div>
 
 <details open>
@@ -65,23 +79,51 @@
 
 <details open>
   <summary>🧬 繁育 <span id="breedInfo" class="sb"></span></summary>
-<div class="breed-toolbar">
-  <button id="breedSortBtn">排序：默认</button>
-</div>
+  <div class="breed-toolbar">
+    <button id="breedSortBtn">排序：默认</button>
+    <select id="breedFilterCol" class="breed-search" style="flex:1; min-height:32px; margin-bottom:0;">
+      <option value="">全部颜色</option>
+    </select>
+    <select id="breedFilterRarity" class="breed-search" style="flex:1; min-height:32px; margin-bottom:0;">
+      <option value="">全部稀有度</option>
+    </select>
+  </div>
   <div class="breed-wrap">
-    <div class="breed-col">
+    <!-- PC 左侧父本列表 -->
+    <div class="breed-col pc-only">
       <div class="breed-head">♂ 父本</div>
       <input id="breedMSearch" placeholder="搜索名字/代数" class="breed-search">
       <div id="breedM" class="breed-list"></div>
     </div>
-    <div class="breed-col">
+
+    <!-- 手机端顶部：双大头像 -->
+    <div class="mobile-only" style="width:100%; justify-content:space-around; margin-bottom:10px;">
+      <div id="breedMAvatarMobile"></div>
+      <div id="breedFAvatarMobile"></div>
+    </div>
+
+    <!-- PC 左侧父本大头像 -->
+    <div class="breed-avatar-col pc-only" id="breedMAvatar"></div>
+    
+    <!-- 中间结果与操作区 -->
+    <div class="breed-center-col">
+      <div class="mobile-only" style="width:100%; flex-direction:column; gap:8px; margin-bottom:10px;">
+         <select id="breedMSelect" class="breed-search" style="margin-bottom:0;"></select>
+         <select id="breedFSelect" class="breed-search" style="margin-bottom:0;"></select>
+      </div>
+      <div id="breedMidInfo" class="sb" style="text-align:center; margin-bottom:10px;"></div>
+      <button id="breedGoBtn" class="primary" disabled>繁育</button>
+    </div>
+
+    <!-- PC 右侧母本大头像 -->
+    <div class="breed-avatar-col pc-only" id="breedFAvatar"></div>
+
+    <!-- PC 右侧母本列表 -->
+    <div class="breed-col pc-only">
       <div class="breed-head">♀ 母本</div>
       <input id="breedFSearch" placeholder="搜索名字/代数" class="breed-search">
       <div id="breedF" class="breed-list"></div>
     </div>
-  </div>
-  <div class="breed-actions">
-    <button id="breedGoBtn" class="primary" disabled>繁育</button>
   </div>
 </details>
 
@@ -122,6 +164,28 @@
 
 <details open>
   <summary>📦 档案 <span id="arcCount" class="sb"></span></summary>
+ <div class="filter" style="margin-bottom:10px;">
+  <input id="arcName" placeholder="搜索名字 / 代数" oninput="mkArc()">
+  <select id="arcSex" onchange="mkArc()">
+    <option value="">全部性别</option>
+    <option value="m">♂ 雄性</option>
+    <option value="f">♀ 雌性</option>
+    <option value="h">⚥ 雌雄同体</option>
+  </select>
+  <select id="arcColor" onchange="mkArc()">
+    <option value="">全部颜色</option>
+  </select>
+  <select id="arcMut" onchange="mkArc()">
+    <option value="">全部属性</option>
+    <option value="any">带有突变</option>
+    <option value="albino">白化</option>
+    <option value="melanor">黑化</option>
+    <option value="pie">斑点</option>
+    <option value="firefly">萤火虫</option>
+    <option value="sterile">不育</option>
+    <option value="doubleWomb">双子宫</option>
+  </select>
+</div>
   <div id="arc" class="gd"></div>
 </details>
 

@@ -188,7 +188,7 @@ button:disabled {
   position: relative;
   width: 100%;
   padding-top: 100%;
- background: linear-gradient(180deg, #a8c8e0 0%, #c8e0b8 100%);
+  background-color: #a8c8e0; /* 这里的旧渐变删掉，留个备用底色 */
   border-radius: 3px;
   overflow: hidden;
 }
@@ -775,3 +775,249 @@ button:disabled {
 /* 🌟 修复：繁育面板里名字和代数重叠的问题 */
 .breed-item .bi-name { font-size: 11px; color: #ffd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;}
 .breed-item .bi-meta { font-size: 9px; color: #888; white-space: nowrap; }
+
+/* === 1.10 繁育面板重构 === */
+.pc-only { display: block; }
+.mobile-only { display: none !important; }
+
+@media (max-width: 768px) {
+  .pc-only { display: none !important; }
+  .mobile-only { display: flex !important; }
+  .breed-wrap { flex-direction: column; }
+}
+
+.breed-wrap { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.breed-col { flex: 1 1 200px; min-width: 0; }
+.breed-avatar-col { 
+  flex: 0 0 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+  min-height: 120px; background: #1d1b2c; border: 1px dashed #38345a; border-radius: 4px; padding: 8px; 
+}
+.breed-center-col { flex: 1 1 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+/* 隐藏下拉框的默认箭头样式干扰 */
+.breed-toolbar select { padding: 4px 6px; }
+
+html {
+  overflow-y: scroll !important; /* 强制保留滚动条位置，防止压扁 */
+}
+
+/* ==========================================
+   🚀 终极主题：满配版 UI 渲染
+   ========================================== */
+
+/* 强制稳定宽度 */
+html { overflow-y: scroll !important; }
+
+/* 1. 马匹背景彻底统一（日夜都用这个清透的渐变） */
+.pxb {
+  background: linear-gradient(180deg, #a8c8e0 0%, #c8e0b8 100%) !important; 
+}
+
+/* 2. 基础底色与静态星空 */
+body:not(.light-mode) {
+  background-color: #14121f !important;
+  color: #e6e6e6 !important;
+  /* 🌟 静态星空背景 */
+  background-image: 
+    radial-gradient(1.5px 1.5px at 20px 30px, #ffffff, transparent),
+    radial-gradient(1px 1px at 50px 70px, #ffffff, transparent),
+    radial-gradient(2px 2px at 90px 40px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 150px 120px, #ffffff, transparent),
+    radial-gradient(2px 2px at 200px 60px, #ffffff, transparent),
+    radial-gradient(1.5px 1.5px at 250px 180px, rgba(255,255,255,0.5), transparent) !important;
+  background-size: 300px 300px !important;
+  background-attachment: fixed !important;
+}
+
+body.light-mode {
+  background-color: #a38f73 !important; /* 深卡其沙土色 */
+  background-image: none !important;
+}
+
+/* 🌟 3. 太阳/月亮（沉入背景，永不挡路） */
+body:not(.light-mode)::before {
+  content: ''; position: fixed; top: 60px; right: 40px; width: 30px; height: 30px;
+  background: transparent; box-shadow: -8px 0 0 0 #f6e05e, -8px -8px 0 0 #f6e05e, 0 -8px 0 0 #f6e05e, 8px -8px 0 0 #f6e05e, 8px 0 0 0 #f6e05e, 8px 8px 0 0 #f6e05e, 0 8px 0 0 #f6e05e, -8px 8px 0 0 #f6e05e;
+  z-index: -1 !important; pointer-events: none; border-radius: 50%;
+}
+body.light-mode::before {
+  content: ''; position: fixed; top: 60px; right: 40px; width: 35px; height: 35px;
+  background: #b87333; box-shadow: -8px 0 0 0 #b87333, 8px 0 0 0 #b87333, 0 -8px 0 0 #b87333, 0 8px 0 0 #b87333;
+  z-index: -1 !important; pointer-events: none; border-radius: 4px;
+}
+
+/* 🌟 4. 文字暴力统一（日间） */
+body.light-mode, body.light-mode *:not(.pxb):not(canvas) {
+  color: #2b1405 !important;
+  text-shadow: none !important;
+}
+body.light-mode .m, body.light-mode .f, body.light-mode .h, 
+body.light-mode .cr, body.light-mode .sb { color: #2b1405 !important; }
+
+/* 🌟 5. 卡片渐变（日夜全统一） */
+/* 夜间模式 */
+.card-new, .sc, .pc, .dxi, .achi, .si, .breed-item, .mdc {
+  background: linear-gradient(180deg, #232135 0%, #1d1b2c 100%) !important;
+  border-color: #38345a !important;
+}
+body:not(.light-mode) .head-card {
+  background: linear-gradient(180deg, #2a2540 0%, #1d1b2c 100%) !important;
+  border: 2px solid #f1c40f !important;
+}
+body:not(.light-mode) .k01-dialogue { background-color: #2a2540 !important; border-color: #f1c40f !important; }
+
+/* 日间模式 */
+body.light-mode .card-new, body.light-mode .sc, body.light-mode .pc, body.light-mode .dxi, 
+body.light-mode .achi, body.light-mode .si, body.light-mode .breed-item, body.light-mode .mdc {
+  background: linear-gradient(180deg, #dfcbb3 0%, #c4ab8e 100%) !important;
+  border-color: #664229 !important;
+}
+body.light-mode .head-card {
+  background: linear-gradient(180deg, #dfcbb3 0%, #c4ab8e 100%) !important;
+  border: 2px solid #664229 !important;
+}
+/* 🌟 修复商店对话框在日间的背景 */
+body.light-mode .k01-dialogue { background-color: #dfcbb3 !important; border-color: #664229 !important; }
+
+/* 🌟 6. 成就解锁专属金色渐变 */
+/* 夜间 */
+.achi.on {
+  background: linear-gradient(180deg, #4a3a20 0%, #2a1d10 100%) !important;
+  border-color: #f1c40f !important;
+  box-shadow: 0 0 10px rgba(241, 196, 15, 0.2) !important;
+}
+.achi.on .an { color: #f1c40f !important; }
+/* 日间 */
+body.light-mode .achi.on {
+  background: linear-gradient(180deg, #e8c2a6 0%, #d4af37 100%) !important;
+  border-color: #b8860b !important;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.4) !important;
+}
+body.light-mode .achi.on .an { color: #4a2e1b !important; }
+
+
+/* 7. 输入框与按钮（日间） */
+body.light-mode input, body.light-mode select, body.light-mode textarea {
+  background-color: #e0cbb3 !important; border: 1px solid #664229 !important;
+}
+body.light-mode button {
+  background-color: #c4ab8e !important; border: 2px solid #664229 !important; font-weight: bold;
+}
+body.light-mode .primary, body.light-mode .buy {
+  background-color: #8c6f52 !important; border: 2px solid #4a2e1b !important;
+}
+body.light-mode .danger {
+  background-color: #b35959 !important; color: #fff !important; border: 2px solid #7a3232 !important;
+}
+
+/* ==========================================
+   🚑 日间模式顽固死角兜底
+   ========================================== */
+body.light-mode .breed-avatar-col {
+  background-color: #d4bfa5 !important;
+  border: 1px dashed #664229 !important;
+}
+
+body.light-mode .toast, body.light-mode .light-toast {
+  background: #dfcbb3 !important;
+  border: 2px solid #664229 !important;
+  color: #2b1405 !important;
+  box-shadow: 0 4px 12px rgba(43, 20, 5, 0.3) !important;
+}
+
+/* 强制覆盖基因浮窗里写死的深色背景块 */
+body.light-mode .mdc div[style*="background:#1d1b2c"], 
+body.light-mode .mdc div[style*="background: #1d1b2c"],
+body.light-mode .mdc div[style*="background:#14121f"] {
+  background-color: #d4bfa5 !important; 
+  color: #2b1405 !important;
+}
+
+/* 蛋卡片日间模式修复 */
+body.light-mode .card.egg {
+  background: linear-gradient(180deg, #dfcbb3 0%, #c4ab8e 100%) !important;
+  border-color: #664229 !important;
+}
+body.light-mode .card.egg .gn,
+body.light-mode .card.egg .st,
+body.light-mode .card.egg .rar {
+  color: #2b1405 !important;
+}
+body.light-mode .card.egg.mut-highlight {
+  border-color: #b35959 !important;
+  box-shadow: 0 0 8px rgba(179, 89, 89, 0.4) !important;
+}
+
+/* ==========================================
+   📐 修复错位与文字对比度补丁
+   ========================================== */
+
+/* 1. 强制统一所有按钮边框宽度，防止切换时页面被撑开 */
+body.light-mode button,
+body.light-mode .primary,
+body.light-mode .buy,
+body.light-mode .danger {
+  border-width: 1px !important; /* 刚才加粗成了2px，现在改回1px */
+}
+
+/* 2. 确保卡片边框在日夜切换时宽度完全一致 */
+.pxb {
+  border: 1px solid transparent; /* 占位，防止切换时框跳动 */
+}
+
+/* 3. 白天模式下，顶部状态栏的胡萝卜/马蹄铁/荧光点文字加强 */
+body.light-mode #stat {
+  color: #2b1405 !important;
+  font-weight: bold;
+}
+body.light-mode #stat .cr { color: #8c502b !important; } /* 胡萝卜颜色加深 */
+body.light-mode #stat span { color: #2b1405 !important; }
+
+/* 4. 白天模式下，时钟倒计时文字加强 */
+body.light-mode #globalClock {
+  color: #664229 !important;
+  font-weight: bold;
+}
+
+/* ==========================================
+   📐 彻底根治繁育面板的“形变/抖动”
+   ========================================== */
+
+/* 1. PC端大头像框和中间结果区固定高度 */
+.breed-avatar-col {
+  height: 130px !important; /* 死死锁住高度 */
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.breed-center-col {
+  height: 130px !important;
+  box-sizing: border-box;
+  justify-content: space-between !important; /* 按钮永远推在最下面 */
+}
+
+/* 2. 中间结果文字区的占位 */
+#breedMidInfo {
+  height: 45px; /* 给文字预留出高度，不管有没有字都不动 */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+}
+
+/* 3. 手机端大头像占位（核心修复） */
+.mobile-only > div {
+  min-height: 125px !important; /* 就算没选马，这里也占住位置 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 4. 繁育按钮尺寸固定 */
+#breedGoBtn {
+  width: 100% !important;
+  min-height: 36px !important;
+}
