@@ -5,11 +5,11 @@ function sv(){
   var d={
     farmName:S.farmName, c:S.c, a:S.a, d:S.d, r:S.r, p:S.p, st:S.st, 
     stT:S.stT, st00T:S.st00T, stud:S.stud, studL:S.studL, studT:S.studT, 
-    studN:S.studN, ach:S.ach, cap:S.cap, eggCap:S.eggCap, eggCap:S.eggCap,head:S.head, headStart:S.headStart, 
+    studN:S.studN, ach:S.ach, cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap, eggCap:S.eggCap,head:S.head, headStart:S.headStart, 
     headRace:S.headRace, headLastTick:S.headLastTick, headTerm:S.headTerm, 
     points:S.points, hoof:S.hoof, trainCount:S.trainCount, hoofSubmitted:S.hoofSubmitted, 
     trainFail:S.trainFail, trainSuccess:S.trainSuccess, unlocked00:S.unlocked00, 
-    headRaceCount:S.headRaceCount, displayMode:S.displayMode, themeMode:S.themeMode, lastRescue:S.lastRescue
+    headRaceCount:S.headRaceCount, displayMode:S.displayMode, themeMode:S.themeMode,headRaceCount:S.headRaceCount, displayMode:S.displayMode, themeMode:S.themeMode, lastRescue:S.lastRescue, refreshData:S.refreshData
   };
   if(ok){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){ok=false;ms=d}}else ms=d;
 }
@@ -26,6 +26,12 @@ function al(d){
   S.points = d.points || 0;
   S.hoof = d.hoof || 0;
   S.cap = d.cap || 50;
+    S.groups = d.groups || ['New Cave'];
+  // 🌟 强制去重，防止旧档数据重复
+  S.groups = S.groups.filter(function(item, pos, self) {
+    return self.indexOf(item) == pos;
+  });
+  S.groupOpen = d.groupOpen || { '-1': true, '0': true };
   S.eggCap = d.eggCap || 10;
   if(S.cap > CAPMAX) S.cap = CAPMAX;
   S.ach = d.ach || {};
@@ -64,6 +70,7 @@ function al(d){
   S.displayMode = d.displayMode || 'color';
   S.themeMode = d.themeMode || 'dark';
   S.lastRescue = d.lastRescue || 0;
+  S.refreshData = d.refreshData || { date: '', s01: 5, s00: 5 };
   
   // 7. 遍历马群 (S.c)
   for(var i = 0; i < S.c.length; i++){
@@ -83,6 +90,11 @@ function al(d){
     if(S.c[i].raceCount === undefined) S.c[i].raceCount = 0;
     if(S.c[i].isRetiredHead === undefined) S.c[i].isRetiredHead = false;
     if(S.c[i].isLocked === undefined) S.c[i].isLocked = false;
+    if(S.c[i].group === undefined) S.c[i].group = -1;
+       // 强制把非法组别移入未分类（防旧档、防手滑写错）
+    if(typeof S.c[i].group !== 'number' || S.c[i].group >= S.groups.length) {
+      S.c[i].group = -1;
+    }
     
     S.c[i].g.col = mapOldColor(S.c[i].g.col);
     S.c[i].g.wingCol = mapOldColor(S.c[i].g.wingCol);
@@ -212,7 +224,7 @@ function migrateDexColors() {
 
 var P={col:{n:'体色',o:CK.map(function(k){return{k:k,n:CL[k][0],t:'c'}})},wingCol:{n:'翼色',o:CK.map(function(k){return{k:k,n:CL[k][0],t:'c'}})},tailCol:{n:'尾色',o:CK.map(function(k){return{k:k,n:CL[k][0],t:'c'}})},win:{n:'翅膀',o:[{k:'none',n:'无翅',t:'c'},{k:'small',n:'小翼',t:'c'},{k:'bat',n:'蝠翼',t:'r'},{k:'feath',n:'羽翼',t:'r'},{k:'drag',n:'龙翼',t:'e'}]},leg:{n:'四肢',o:[{k:'hoof',n:'普通马蹄',t:'c'},{k:'feath',n:'羽蹄',t:'c'},{k:'cat',n:'猫爪',t:'r'},{k:'drag',n:'龙爪',t:'e'},{k:'cryst',n:'水晶蹄',t:'r'}]},bod:{n:'身体',o:[{k:'plain',n:'无花纹',t:'c'},{k:'spot',n:'斑点',t:'c'},{k:'stripe',n:'条纹',t:'r'},{k:'star',n:'星纹',t:'r'},{k:'scale',n:'鳞甲',t:'e'}]},hor:{n:'角',o:[{k:'none',n:'无角',t:'c'},{k:'single',n:'独角',t:'c'},{k:'twin',n:'双角',t:'r'},{k:'deer',n:'鹿角',t:'r'},{k:'drag',n:'龙角',t:'e'}]},tai:{n:'尾巴',o:[{k:'horse',n:'马尾',t:'c'},{k:'short',n:'短尾',t:'c'},{k:'lion',n:'狮尾',t:'r'},{k:'drag',n:'龙尾',t:'e'},{k:'star',n:'星辉尾',t:'r'}]},eye:{n:'眼睛',o:[{k:'round',n:'圆瞳',t:'c'},{k:'big',n:'大眼',t:'c'},{k:'drag',n:'龙眼',t:'e'},{k:'hetero',n:'异色瞳',t:'r'},{k:'star',n:'星瞳',t:'r'}]}};
 var PK=Object.keys(P),TW={c:20,r:8,e:3},RK=['win','leg','bod','hor','tai','eye'];
-var MR=0.05,CMI=0.05,MBC=5,HM=600000,CAR=5,SSZ=5,SPR=15,SRM=600000,MP=200,VP=500,IP=200,FP=50,DP=100,SB=15,SMN=120000,SMX=240000,CAP0=50,CAPSTEP=100,CAPMAX=200,UNSET_FEE=50,TWIN_RATE=0.005,HEAD_FULL=86400000,HEAD_FORCE=172800000,RACE_CD=1800000,TRAIN_COST=50,T3_RATE=0.05;
+var MR=0.05,CMI=0.05,MBC=5,HM=600000,CAR=5,SSZ=5,SPR=15,SRM=1800000,MP=200,VP=500,IP=200,FP=50,DP=100,SB=15,SMN=120000,SMX=240000,CAP0=50,CAPSTEP=100,CAPMAX=200,UNSET_FEE=50,TWIN_RATE=0.005,HEAD_FULL=86400000,HEAD_FORCE=172800000,RACE_CD=1800000,TRAIN_COST=50,T3_RATE=0.05;
 var EGG_CAP0=10, EGG_CAPMAX=20, EGG_COST=50, EGG_STEP=1;
 var MT=['albino','melanor'],VT=['twohead','noneyes','multileg','conjoined'],VN={twohead:'双头',noneyes:'无眼',multileg:'多肢',conjoined:'连体'};
 var SX={m:{n:'雄性',s:'♂',c:'m',w:48},f:{n:'雌性',s:'♀',c:'f',w:48},h:{n:'雌雄同体',s:'⚥',c:'h',w:4}};
@@ -311,7 +323,8 @@ function newC(gen, opt) {
     firefly: false,
     induceHerm: false,
     sterile: st,
-    doubleWomb: dw
+    doubleWomb: dw,
+    group: -1
   };
   
   // 🌟 翅膀判定
@@ -1026,6 +1039,9 @@ var S = {
   studN: 0,
   ach: {},
   cap: 50,
+  groups: ['New Cave'],
+  groupOpen: { '-1': true, '0': true }, // 记录折叠状态
+  _batchSel: [], // 批量选中的马匹ID
   eggCap: 10,
   _hc: 0,
   head: null,
@@ -1039,7 +1055,10 @@ var S = {
   _k00Text: '',
   displayMode: 'color',
   themeMode: 'dark',
-  lastRescue: 0
+    lastRescue: 0,
+   refreshData: { date: '', s01: 5, s00: 5 },
+   arcPage: 1,
+  arcPageSize: 24,
 };
 function findC(id){for(var i=0;i<S.c.length;i++)if(S.c[i].id===id)return S.c[i];for(var j=0;j<S.a.length;j++)if(S.a[j].id===id)return S.a[j];return null}
 function unlock(id) {
@@ -1056,21 +1075,33 @@ function unlock(id) {
   }
   if (ac) showToast('🏆 解锁成就：' + ac.n + ' (+5 荧光点)');
 }
-function showToast(msg) {
+function showToast(msg, isPersistent) {
   var n = document.querySelectorAll('.toast').length;
   var t = ce('div');
   t.className = 'toast';
-  if (document.body.classList.contains('light-mode')) {
-    t.classList.add('light-toast');
-  }
+  if (isPersistent) t.style.pointerEvents = 'auto';
   t.style.top = (20 + n * 50) + 'px';
-  t.textContent = msg;
+  
+  var span = ce('span');
+  span.textContent = msg;
+  t.appendChild(span);
+  
+  if (isPersistent) {
+    var closeBtn = ce('span');
+    closeBtn.textContent = ' ✕';
+    closeBtn.style.cssText = 'margin-left:10px; cursor:pointer; font-weight:bold; opacity:0.7;';
+    closeBtn.onclick = function() { if(t.parentNode) t.parentNode.removeChild(t); };
+    t.appendChild(closeBtn);
+  }
+  
   document.body.appendChild(t);
   setTimeout(function() { t.classList.add('show') }, 10);
-  setTimeout(function() {
-    t.classList.remove('show');
-    setTimeout(function() { if(t.parentNode) t.parentNode.removeChild(t) }, 300);
-  }, 3000);
+  if (!isPersistent) {
+    setTimeout(function() {
+      t.classList.remove('show');
+      setTimeout(function() { if(t.parentNode) t.parentNode.removeChild(t) }, 300);
+    }, 3000);
+  }
 }
 function checkAch(c, mus, a, b) {
   if (c.gen >= 10) unlock('g10');
@@ -1301,7 +1332,13 @@ function mkStore00UI(){
 
  btnGroup.appendChild(bClear);
  btnGroup.appendChild(bFill);
-
+var bRefresh = ce('button');
+  bRefresh.className = 'test';
+  bRefresh.style.cssText = 'padding:4px 10px; font-size:12px; min-height:32px; white-space:nowrap;';
+  bRefresh.textContent = '🔄 刷新 (剩' + S.refreshData.s00 + '/5)';
+  if (S.refreshData.s00 <= 0) bRefresh.disabled = true;
+  bRefresh.onclick = function() { manualRefresh('00'); };
+  btnGroup.appendChild(bRefresh);
  toolbar.appendChild(title);
  toolbar.appendChild(btnGroup);
  se.appendChild(toolbar);
@@ -1488,18 +1525,25 @@ for(var k=0; k<5; k++) {
 try {
   if(pg){
     pg.innerHTML='';
-    var pmc=ce('div');pmc.className='pc';pmc.innerHTML='<div class="ic">🔥</div><div class="pn">狂热魔药</div><div class="pd">双子宫专用<br>恢复5次繁育</div><button class="buy">🧲 50 铁</button><div class="pct">持有 '+(S.p.hfan||0)+'</div>';pmc.querySelector('button').onclick=function(){buyHoofPotion('hfan')};pg.appendChild(pmc);
+    pg.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:10px; margin-bottom:10px;';    
+    var mkHirePot = function(icon, name, cost, id) {
+      var b = ce('div');
+      b.className = 'pc';
+      b.style.cssText = 'width:85px; flex:0 0 85px; padding:10px 4px; cursor:pointer;';
+      b.innerHTML = '<div class="ic" style="font-size:26px;">'+icon+'</div>'+
+                    '<div class="pn" style="color:var(--accent); font-size:13px; margin-top:4px; white-space:nowrap;">'+name+'</div>'+
+                    '<div class="pd" style="color:var(--page-dim); font-size:11px; margin-top:4px;">🧲 '+cost+'</div>';
+      b.onclick = function(){ showPotionDetail('00', id); };
+      pg.appendChild(b);
+    };
     
-    var pfc=ce('div');pfc.className='pc';pfc.innerHTML='<div class="ic">🌾</div><div class="pn">丰饶魔药</div><div class="pd">不育专用<br>临时繁育+1</div><button class="buy">🧲 50 铁</button><div class="pct">持有 '+(S.p.hfeng||0)+'</div>';pfc.querySelector('button').onclick=function(){buyHoofPotion('hfeng')};pg.appendChild(pfc);
-    
-    var pmx=ce('div');pmx.className='pc';pmx.innerHTML='<div class="ic">🎲</div><div class="pn">混合药剂</div><div class="pd">完全随机<br>刷新3个颜色</div><button class="buy">🧲 70 铁</button><div class="pct">持有 '+(S.p.hmix||0)+'</div>';pmx.querySelector('button').onclick=function(){buyHoofPotion('hmix')};pg.appendChild(pmx);
-    
-    var pdr=ce('div');pdr.className='pc';pdr.style.borderColor='var(--sterile)';pdr.innerHTML='<div class="ic">🩸</div><div class="pn" style="color:var(--sterile)">红龙之血</div><div class="pd">头马比赛<br>魅力+10（1次）</div><button class="buy" style="background:var(--danger-bg);border-color:var(--danger-bd);color:var(--danger-fg)">🧲 100 铁</button><div class="pct">持有 '+(S.p.hdrag||0)+'</div>';pdr.querySelector('button').onclick=function(){buyHoofPotion('hdrag')};pg.appendChild(pdr);
-    
-    var pnt=ce('div');pnt.className='pc';pnt.style.borderColor='var(--test-bd)';pnt.innerHTML='<div class="ic">🌙</div><div class="pn" style="color:var(--test-fg)">夜骐的魔药</div><div class="pd">头马速度<br>+1~5级</div><button class="buy" style="background:var(--test-bg);border-color:var(--test-bd);color:var(--test-fg)">🧲 200 铁</button><div class="pct">持有 '+(S.p.hnight||0)+'</div>';pnt.querySelector('button').onclick=function(){buyHoofPotion('hnight')};pg.appendChild(pnt);
+    mkHirePot('🔥', '狂热魔药', 50, 'hfan');
+    mkHirePot('🌾', '丰饶魔药', 50, 'hfeng');
+    mkHirePot('🎲', '混合药剂', 70, 'hmix');
+    mkHirePot('🩸', '红龙之血', 100, 'hdrag');
+    mkHirePot('🌙', '夜骐魔药', 200, 'hnight');
   }
 } catch(e) { console.error("药剂区报错", e); }
-
 try {
   if(cb){
     cb.innerHTML='';
@@ -1538,6 +1582,41 @@ try {
     }
   } catch(e) {}
 }
+function checkDailyReset() {
+  var today = new Date().toDateString();
+  if (S.refreshData.date !== today) {
+    S.refreshData.date = today;
+    S.refreshData.s01 = 5;
+    S.refreshData.s00 = 5;
+    sv();
+  }
+}
+
+function manualRefresh(type) {
+  checkDailyReset();
+  if (type === '01') {
+    if (S.refreshData.s01 <= 0) return alert('今日立刻刷新次数已用尽。');
+    if (S.r < 100) return alert('胡萝卜不足 (需要 100 🥕)');
+    if (confirm('⚠️ 确定消耗 100 🥕 立刻刷新月光商店吗？\n（今日剩余次数：' + S.refreshData.s01 + '/5）')) {
+      S.r -= 100;
+      S.refreshData.s01--;
+      mkStore(true);
+      sv(); render();
+      showToast('🛒 月光商店已刷新！');
+    }
+  } else if (type === '00') {
+    if (S.refreshData.s00 <= 0) return alert('今日立刻刷新次数已用尽。');
+    if ((S.hoof || 0) < 50) return alert('马蹄铁不足 (需要 50 🧲)');
+    if (confirm('⚠️ 确定消耗 50 🧲 立刻刷新缄默商店吗？\n（今日剩余次数：' + S.refreshData.s00 + '/5）')) {
+      S.hoof -= 50;
+      S.refreshData.s00--;
+      S.trainCount = 1;
+      S.hoofSubmitted = [false, false, false, false, false];
+      sv(); render();
+      showToast('🌑 缄默商店已刷新！');
+    }
+  }
+}
 function mkStore(force){
   var now=Date.now();
   // 只要时间没到，哪怕你买空了商店，也绝对不刷新！
@@ -1559,12 +1638,17 @@ if (wingOpt.k !== 'none') {
 }
 
 // 基础价 + 魅力加成 + 翅膀溢价
-c.price = 15 + Math.floor(rSFull(c) * 1.5) + wingBonus;
+ c.price = 15 + Math.floor(rSFull(c) * 1.5) + wingBonus;
+    c.hasWing = wingOpt.k !== 'none'; // 👈 加上这个标记
     S.st.push(c);
   }
+  if (c.hasWing) {
+      setTimeout(function(){ showToast('✨ 商店似乎进了一批带翅膀的好货！', true); }, 500);
+    }
   S.stT=now;
 }
-function buyStore(i){var it=S.st[i];if(!it||it.sold)return;if(S.r<SPR){alert('胡萝卜不够');return}if(S.c.length>=S.cap){alert('马群已满');return}S.r-=SPR;it.sold=true;it.store=false;S.c.push(it);mkDex(it);sv();render()}
+function buyStore(i){var it=S.st[i];if(!it||it.sold)return;if(S.r<SPR){alert('胡萝卜不够');return}if(S.c.length>=S.cap){alert('马群已满');return}S.r-=SPR;it.sold=true;
+it.group = -1;it.store=false;S.c.push(it);mkDex(it);sv();render()}
 function buyPot(t){if(t==='fire'){if(S.points<FP){alert('荧光点不够');return}S.points-=FP;S.p.fire=(S.p.fire||0)+1;}else if(t==='dispel'){if(S.r<DP){alert('胡萝卜不够');return}S.r-=DP;S.p.dispel=(S.p.dispel||0)+1;}else{var pr=t==='m'?MP:t==='v'?VP:IP;if(S.r<pr){alert('胡萝卜不够');return}S.r-=pr;S.p[t]=(S.p[t]||0)+1;}sv();render()}
 function buyCap(){if(S.cap>=CAPMAX){alert('已达上限 '+CAPMAX);return}if(S.r<CAPSTEP){alert('胡萝卜不够');return}S.r-=CAPSTEP;S.cap=Math.min(CAPMAX,S.cap+10);unlock('cap50');if(S.cap>=100)unlock('cap100');if(S.cap>=200)unlock('cap200');sv();render()}
 function showM(html){$('modalC').innerHTML=html;$('modal').style.display='flex'}
@@ -1659,14 +1743,14 @@ var buildGeneHtml = function(c){
   var si=SX[c.sx]||SX.m;
   var isEgg=!isH(c);
   var muts=[];
-  if(c.mut)muts.push(c.mut==='albino'?'白化':'黑化');
-  if(c.pie)muts.push(c.pieColor==='w'?'白斑':'黑斑');
-  if(c.firefly)muts.push('<span style="color:#f1c40f">萤火虫</span>');
-  if(c.sterile)muts.push('<span style="color:#e05a7a">不育</span>');
-  if(c.doubleWomb)muts.push('<span style="color:#f1c40f">双子宫</span>');
-  var mutStr=muts.length?' · '+muts.join(' · '):'';
-  
-  var h='<div class="mdt">'+(c.isLocked ? '🔒 ' : '')+(c.name?'「'+c.name+'」':'')+'第 '+c.gen+' 代 · '+si.s+' '+si.n+'</div><div style="font-size:11px;color:#888;margin-bottom:8px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>';
+if(c.mut)muts.push(c.mut==='albino'?'白化':'黑化');
+if(c.pie)muts.push(c.pieColor==='w'?'白斑':'黑斑');
+if(c.firefly)muts.push('<span style="color:var(--gold)">萤火虫</span>');
+if(c.sterile)muts.push('<span style="color:var(--sterile)">不育</span>');
+if(c.doubleWomb)muts.push('<span style="color:var(--gold)">双子宫</span>');
+var mutStr=muts.length?' · '+muts.join(' · '):'';
+
+var h='<div class="mdt">'+(c.isLocked ? '🔒 ' : '')+(c.name?'「'+c.name+'」':'')+'第 '+c.gen+' 代 · '+si.s+' '+si.n+'</div><div style="font-size:11px;color:var(--page-dim);margin-bottom:8px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>';
   h += buildGeneHtml(c);
   
   h += '<div class="ma">';
@@ -1704,6 +1788,12 @@ var buildGeneHtml = function(c){
   }
   h+='</div><button class="mc" onclick="closeM()">关闭</button>';
   showM(h);
+}
+function moveHorseGroup(id, targetG) {
+  var c = findC(id);
+  if(!c) return;
+  c.group = parseInt(targetG);
+  sv(); closeM(); render();
 }
 // ==== 马匹命名 ====
 function rename(id){
@@ -1798,7 +1888,9 @@ function dlExp(){
   if(customName.trim() === '') customName = defaultName;
   customName = customName.replace(/[\/\\:*?"<>|]/g, '_'); // 过滤非法字符
 
-  var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,cap:S.cap, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,headRaceCount:S.headRaceCount,farmName:S.farmName,displayMode:S.displayMode};
+  var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,
+    cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
+    headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,displayMode:S.displayMode};
   
   var jsonString = JSON.stringify(d);
   
@@ -1847,7 +1939,7 @@ function doImp(t){
     if(!d.c)throw new Error('无效的存档文件（缺少核心马匹数据）');
 
     S.c=d.c||[]; S.a=d.a||[]; S.d=d.d||{}; S.r=d.r!=null?d.r:20;
-    S.farmName=d.farmName||'我的马场'; S.points=d.points||0;S.cap=d.cap||50; S.eggCap=d.eggCap||10; S.ach=d.ach||{};
+    S.farmName=d.farmName||'我的马场'; S.points=d.points||0;S.cap=d.cap||50; S.groups=d.groups||['New Cave']; S.groupOpen=d.groupOpen||{'-1':true,'0':true}; S.eggCap=d.eggCap||10; S.ach=d.ach||{};
     S.st=d.st||[]; S.stT=d.stT||0; S.st00T=d.st00T||S.stT||0; S.unlocked00=d.unlocked00||false;
     S.hoof=d.hoof||0; S.trainCount=d.trainCount!==undefined?d.trainCount:1;
     S.hoofSubmitted=d.hoofSubmitted||[false,false,false,false,false];
@@ -1860,6 +1952,7 @@ function doImp(t){
     S.stud=d.stud||null; S.studL=d.studL||0; S.studT=d.studT||0; S.studN=d.studN||0;
     S.head=d.head||null; S.headStart=d.headStart||0; S.headRace=d.headRace||0;
     S.headLastTick=d.headLastTick||0; S.headTerm=d.headTerm||0; S.headRaceCount=d.headRaceCount||0;
+    S.refreshData=d.refreshData||{ date: '', s01: 5, s00: 5 };
     S.sel=[];
     
     // 遍历马群 (S.c)
@@ -1889,6 +1982,12 @@ function doImp(t){
       if(S.c[i].sterile===undefined)S.c[i].sterile=false;
       if(S.c[i].doubleWomb===undefined)S.c[i].doubleWomb=false;
       if(S.c[i].isLocked===undefined)S.c[i].isLocked=false;
+      if(S.c[i].group === undefined) S.c[i].group = -1;
+      // 强制把非法组别移入未分类（防旧档、防手滑写错）
+    if(typeof S.c[i].group !== 'number' || S.c[i].group >= S.groups.length) {
+      S.c[i].group = -1;
+       
+    }
     }
     
     // 遍历档案 (S.a) —— 去除了重复的垃圾代码
@@ -1967,7 +2066,7 @@ function mkHeadUI(){
   var elapsed=Date.now()-S.headStart;
   
   var html='<div class="hn">'+(c.isLocked ? '🔒 ' : '')+(c.name||('第 '+c.gen+' 代'))+' '+si.s+' '+si.n+'</div>';
-  html+='<div class="hrow">魅力值 '+charm+(bonus||c.tempCharmBonus?' <span style="color:#f1c40f">(+'+((bonus||0)+(c.tempCharmBonus||0))+')</span>':'')+'</div>';
+  html+='<div class="hrow">魅力值 '+charm+(bonus||c.tempCharmBonus?' <span style="color:var(--gold)">(+'+((bonus||0)+(c.tempCharmBonus||0))+')</span>':'')+'</div>';
   html+='<div class="hrow">速度 '+speed.toFixed(1)+' / 20</div>';
   if(!c.sterile){html+='<div class="hrow">剩余繁育 '+(getMaxBc(c)-c.bc)+' / '+getMaxBc(c)+'</div>'}
 else{html+='<div class="hrow" style="color:var(--sterile)">不育（无需繁育）</div>'}
@@ -2034,13 +2133,11 @@ function checkSoftLock() {
   render(); // 让背后的UI状态立刻更新
 
   // 5. 弹出 01 的专属对话
-  var html = '<div class="mdt" style="text-align:center; color:#f1c40f; font-size:16px; margin-bottom:15px;">✨ 发现了一个 Beta 彩蛋！ ✨</div>';
-  html += '<div style="text-align:left; line-height:1.8; color:#e6e6e6; font-size:14px; margin-bottom:20px; padding:0 10px;">';
-  html += '<b style="color:#f0a04b;">01：</b>“噢，牛仔！恭喜你触发了一个Beta彩蛋！”<br><br>';
-  html += '“不过，如果马场里没有马的话，怎么能叫一个马场呢？”<br><br>';
-  html += '“事已至此，拿上你的胡萝卜，去月光商店买一匹马，重新开始吧！”</div>';
-  
-  html += '<div style="text-align:center; color:#a0e0a0; font-weight:bold; margin-bottom:20px;">(🥕 50 胡萝卜已自动放入您的仓库)</div>';
+ var html = '<div class="mdt" style="text-align:center; color:var(--gold); font-size:16px; margin-bottom:15px;">✨ 发现了一个 Beta 彩蛋！ ✨</div>';
+html += '<div style="text-align:left; line-height:1.8; color:var(--page-fg); font-size:14px; margin-bottom:20px; padding:0 10px;">';
+html += '<b style="color:var(--accent);">01：</b>“噢，牛仔！恭喜你触发了一个Beta彩蛋！”<br><br>';
+// ...
+html += '<div style="text-align:center; color:var(--st-ready); font-weight:bold; margin-bottom:20px;">(🥕 50 胡萝卜已自动放入您的仓库)</div>';
   html += '<button class="primary" onclick="closeM()" style="width:100%; padding:12px; font-size:16px; border-radius:6px; font-weight:bold;">好的，谢谢01</button>';
   
   showM(html);
@@ -2056,17 +2153,178 @@ function render(){
     if($('farmNameBox')) $('farmNameBox').textContent = '🏡 ' + (S.farmName || '我的马场');
   } catch(e) {}
 
-  try {
+ try {
     var list = $('list');
     list.innerHTML = '';
     var shown = filterList();
     if(S.head) shown = shown.filter(function(x){return x.id !== S.head});
-    if(shown.length === 0) {
-      list.innerHTML = '<div class="em">' + (S.c.length === 0 ? '没有马了' : '没有符合条件的马') + '</div>';
+    
+    // 🌟 顶部操作栏（马匹转移与全选）
+var batchBar = ce('div');
+batchBar.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:4px; width:100%;';
+
+var toggleBatchBtn = ce('button');
+toggleBatchBtn.className = window._batchMode ? 'danger' : 'test';
+toggleBatchBtn.style.cssText = 'flex:1; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
+toggleBatchBtn.textContent = window._batchMode ? '✖ 退出' : '☑️ 开启马匹转移';
+toggleBatchBtn.onclick = function(){
+  window._batchMode = !window._batchMode;
+  if(!window._batchMode) S._batchSel = []; // 退出时清空选中
+  render();
+};
+
+if (!window._batchMode) {
+  batchBar.appendChild(toggleBatchBtn);
+} else {
+  // 批量模式下的按钮组（并排）
+  var btnRow = ce('div');
+  btnRow.style.cssText = 'display:flex; gap:8px; width:100%;';
+  
+  // 判断当前列表是否已全选
+  var allSelected = shown.length > 0;
+  if (allSelected) {
+    for (var i=0; i<shown.length; i++) {
+      if (S._batchSel.indexOf(shown[i].id) < 0) {
+        allSelected = false;
+        break;
+      }
     }
-    for(var i=0; i<shown.length; i++) {
-      list.appendChild(mkCard(shown[i]));
+  }
+  
+  var selectAllBtn = ce('button');
+  selectAllBtn.className = 'primary';
+  selectAllBtn.style.cssText = 'flex:1; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
+  selectAllBtn.textContent = allSelected ? '☒ 取消全选' : '☑️ 一键全选';
+  
+  // 🌟 核心优化：纯 DOM 操作，绝不触发 render 重绘
+  selectAllBtn.onclick = function(){
+    var isCancel = (selectAllBtn.textContent === '☒ 取消全选');
+    
+    if (isCancel) {
+      S._batchSel = []; 
+    } else {
+      S._batchSel = shown.map(function(c){ return c.id; });
     }
+    
+    // 直接操作已有的 DOM 节点
+    var allChks = list.querySelectorAll('input[type="checkbox"]');
+    for(var i=0; i<allChks.length; i++){
+      allChks[i].checked = !isCancel;
+    }
+    
+    // 切换按钮文字
+    selectAllBtn.textContent = isCancel ? '☑️ 一键全选' : '☒ 取消全选';
+  };
+  
+  btnRow.appendChild(selectAllBtn);
+  btnRow.appendChild(toggleBatchBtn);
+  batchBar.appendChild(btnRow);
+
+  // 转移下拉框
+  var batchSel = ce('select');
+  batchSel.className = 'breed-search';
+  batchSel.style.cssText = 'width:100%; min-height:36px; margin:0; font-size:14px; border:2px solid var(--primary-bd);';
+  batchSel.innerHTML = '<option value="">-- 选择目标分组进行转移 --</option>';
+  for(var gi=0; gi<S.groups.length; gi++){
+    batchSel.innerHTML += '<option value="'+gi+'">'+S.groups[gi]+'</option>';
+  }
+  batchSel.onchange = function(){
+    var targetG = parseInt(this.value);
+    if(isNaN(targetG)) return;
+    if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
+    S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
+    S._batchSel = [];
+    sv(); render(); // 这里必须 render，因为马匹的组别真的变了
+  };
+  batchBar.appendChild(batchSel);
+}
+
+list.appendChild(batchBar);
+
+    // 开始分组渲染
+    var renderGroup = function(groupId, groupName) {
+  // 🌟 修复 0 被当成假值的问题
+  var groupHorses = shown.filter(function(c){ 
+    var g = (c.group === undefined || c.group === null) ? -1 : c.group;
+    return g === groupId; 
+  });
+  if(groupId === -1 && groupHorses.length === 0) return;
+      
+        var det = ce('details');
+      det.className = 'dex-group';
+      
+      // 🌟 默认展开：如果是未分类强制展开，其他组如果没记录过也默认展开
+      if(groupId === -1){
+        det.open = true;
+      } else {
+        det.open = S.groupOpen[groupId] !== false;
+      }
+      
+     var summ = ce('summary');
+summ.className = 'dex-group-title';
+// 保留 Flex 布局
+summ.style.cssText = 'display:flex; align-items:center; gap:8px; font-size:15px; color:var(--page-fg); font-weight:bold;';
+
+var titleSpan = ce('span');
+titleSpan.textContent = (groupId===-1?'📦 未分类':groupName) + ' ('+groupHorses.length+')';
+summ.appendChild(titleSpan);
+
+// 独立的改名按钮
+if(groupId >= 0){
+  var editBtn = ce('button');
+  editBtn.className = 'test';
+  // 🌟 margin-left: auto 是灵魂，直接把它推到容器最右侧
+  editBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; margin-left:auto; border-radius:4px;';
+  editBtn.textContent = '✏️ 改名';
+  editBtn.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var newName = prompt('修改分组名称（最多50字符，1个汉字算2字符）：', groupName);
+    if(newName === null) return;
+    newName = newName.trim();
+    if(!newName) newName = 'New Cave';
+    var byteLength = 0;
+    for (var i = 0; i < newName.length; i++) {
+      if (newName.charCodeAt(i) <= 127) byteLength += 1;
+      else byteLength += 2;
+    }
+    if (byteLength > 50) return alert('名字太长了！最多50个字符。');
+    S.groups[groupId] = newName;
+    sv(); render();
+  };
+  summ.appendChild(editBtn);
+}
+      
+     // 🌟 未分类组禁止折叠
+      if (groupId === -1) {
+        summ.onclick = function(e){
+          e.preventDefault(); // 阻止浏览器默认的折叠行为
+        };
+      } else {
+        summ.onclick = function(e){
+          setTimeout(function() {
+            S.groupOpen[groupId] = det.open;
+            sv();
+          }, 10);
+        };
+      }
+      
+      det.appendChild(summ);
+      
+      var wrap = ce('div');
+      wrap.className = 'gd';
+      for(var m=0; m<groupHorses.length; m++){
+        wrap.appendChild(mkCard(groupHorses[m]));
+      }
+      det.appendChild(wrap);
+      list.appendChild(det);
+    };
+
+    for(var g=0; g<S.groups.length; g++){
+      renderGroup(g, S.groups[g]);
+    }
+    renderGroup(-1, '未分类');
+    
     $('cCount').textContent = shown.length + '/' + S.c.length + '/' + S.cap;
   } catch(e) { console.error('马群渲染失败', e); }
 
@@ -2094,7 +2352,10 @@ function render(){
 }
 function mkEggCard(c){var cd=ce('div');var isMutEgg=(c.mut||c.pie);cd.className='card egg'+(isMutEgg?' mut-highlight':'');var mb=ce('button');mb.className='mb';mb.textContent='⋯';mb.onclick=(function(id){return function(e){e.stopPropagation();openMenu(id)}})(c.id);cd.appendChild(mb);cd.appendChild(mkPB(c));var gn=ce('div');gn.className='gn';gn.textContent='第 '+c.gen+' 代';cd.appendChild(gn);var st=stTx(c);var stl=ce('div');stl.className='st '+st.cls;stl.setAttribute('data-cid',c.id);stl.textContent=st.text;cd.appendChild(stl);var m=ce('div');m.className='rar';m.textContent=isMutEgg?'✨ 孕育着强大魔力…':'孵化中…';cd.appendChild(m);return cd}
 function mkCard(c){
-  var cd=ce('div');var isSel=S.sel.indexOf(c.id)>=0;var isStud=S.stud===c.id;var inArc=S.a.some(function(x){return x.id === c.id});
+  var cd=ce('div');
+  var isSel=S.sel.indexOf(c.id)>=0;
+  var isStud=S.stud===c.id;
+  var inArc=S.a.some(function(x){return x.id === c.id});
   var hasRealVar=(c.var); 
   var isSpecial = (c.var === 'special_01' || c.var === 'special_00');
   
@@ -2107,37 +2368,63 @@ function mkCard(c){
 
   // 顶部
   var top=ce('div');top.className='card-top';
-if(isSpecial) {
-  top.innerHTML = '<span style="color:var(--gold);font-size:10px;">传说生物</span>' +
-                  '<span style="color:var(--page-dim);font-size:10px;">魅力 40</span>';
-} else {
-  var crownHtml = (c.headTerm > 0) ? '<span class="crown" style="color:var(--gold);font-size:10px;margin-right:2px;">👑</span>' : '';
-
-  var bcHtml = '';
-  if (inArc) {
-    bcHtml = '归档';
-  } else if (c.sterile && !c.tempBreed) {
-    bcHtml = '<span style="color:var(--sterile)">不育</span>';
-  } else if (c.tempBreed) {
-    bcHtml = '<span style="color:var(--temp-breed-fg)">临时 1/1</span>';
-  } else if (c.cd > Date.now()) {
-    bcHtml = '<span style="color:var(--sterile)">冷却 '+Math.ceil((c.cd-Date.now())/60000)+'m</span>';
+  if(isSpecial) {
+    top.innerHTML = '<span style="color:var(--gold);font-size:10px;">传说生物</span>' +
+                    '<span style="color:var(--page-dim);font-size:10px;">魅力 40</span>';
   } else {
-    bcHtml = (getMaxBc(c)-c.bc)+'/'+getMaxBc(c);
+    var crownHtml = (c.headTerm > 0) ? '<span class="crown" style="color:var(--gold);font-size:10px;margin-right:2px;">👑</span>' : '';
+
+    var bcHtml = '';
+    if (inArc) {
+      bcHtml = '归档';
+    } else if (c.sterile && !c.tempBreed) {
+      bcHtml = '<span style="color:var(--sterile)">不育</span>';
+    } else if (c.tempBreed) {
+      bcHtml = '<span style="color:var(--temp-breed-fg)">临时 1/1</span>';
+    } else if (c.cd > Date.now()) {
+      bcHtml = '<span style="color:var(--sterile)">冷却 '+Math.ceil((c.cd-Date.now())/60000)+'m</span>';
+    } else {
+      bcHtml = (getMaxBc(c)-c.bc)+'/'+getMaxBc(c);
+    }
+
+    var rarHtml = '魅力 '+rSFull(c) + (hasRealVar ? ' <span style="color:var(--gold)">★</span>' : '');
+    top.innerHTML = '<span style="color:var(--page-dim);font-size:10px;">第'+c.gen+'代</span>' +
+                    '<span class="bc">'+crownHtml+bcHtml+'</span>' +
+                    '<span style="color:var(--page-dim);font-size:10px;">'+rarHtml+'</span>';
   }
+  cd.appendChild(top);
 
-  var rarHtml = '魅力 '+rSFull(c) + (hasRealVar ? ' <span style="color:var(--gold)">★</span>' : '');
-  top.innerHTML = '<span style="color:var(--page-dim);font-size:10px;">第'+c.gen+'代</span>' +
-                  '<span class="bc">'+crownHtml+bcHtml+'</span>' +
-                  '<span style="color:var(--page-dim);font-size:10px;">'+rarHtml+'</span>';
+ // 🌟 名字与勾选框
+var nameRow = ce('div');
+nameRow.className = 'name-row';
+// 父容器相对定位，固定高度
+nameRow.style.cssText = 'position:relative; width:100%; height:18px; margin-top:2px;';
+
+// 勾选框
+if (!inArc && window._batchMode) {
+  if(!S._batchSel) S._batchSel = [];
+  var chk = ce('input');
+  chk.type = 'checkbox';
+  chk.style.cssText = 'position:absolute; left:2px; top:50%; transform:translateY(-50%) scale(1.2); cursor:pointer; margin:0; z-index:2;';
+  if(S._batchSel.indexOf(c.id) >= 0) chk.checked = true;
+  chk.onclick = function(e){
+    e.stopPropagation();
+    if(chk.checked){
+      if(S._batchSel.indexOf(c.id) < 0) S._batchSel.push(c.id);
+    } else {
+      S._batchSel = S._batchSel.filter(function(id){ return id !== c.id; });
+    }
+  };
+  nameRow.appendChild(chk);
 }
-cd.appendChild(top);
 
-  // 名字
- var nameRow = ce('div');
- nameRow.className = 'name-row';
- nameRow.textContent = c.name || 'unknown'; 
- cd.appendChild(nameRow);
+// 文字：绝对居中，超长变省略号，左右留空防遮挡
+var nmText = ce('span');
+nmText.textContent = c.name || 'unknown';
+nmText.style.cssText = 'position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); max-width:calc(100% - 32px); text-align:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;';
+nameRow.appendChild(nmText);
+
+cd.appendChild(nameRow);
 
   // 图片
   var pxb = mkPB(c);
@@ -2156,101 +2443,154 @@ cd.appendChild(top);
   cd.appendChild(sexRow);
 
   // 状态图标
- if(!isSpecial){
-      var statusRow = ce('div'); statusRow.className = 'status-row';
-      if(c.induceHerm) statusRow.innerHTML += '<span title="诱变魔药生效中">🍷</span>';
-      if(c.tempBreed) statusRow.innerHTML += '<span title="丰饶魔药生效中">🌾</span>';
-      cd.appendChild(statusRow);
+  if(!isSpecial){
+    var statusRow = ce('div'); statusRow.className = 'status-row';
+    if(c.induceHerm) statusRow.innerHTML += '<span title="诱变魔药生效中">🍷</span>';
+    if(c.tempBreed) statusRow.innerHTML += '<span title="丰饶魔药生效中">🌾</span>';
+    cd.appendChild(statusRow);
 
-      // === 底部色块/文字网格 ===
-      var bottom=ce('div');bottom.className='card-bottom';
-      
-      if(S.displayMode === 'text'){
-        // 【文字模式】
-        bottom.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; justify-content:center; padding:0 2px;';
-        var addTag = function(txt, type) {
-  var span = ce('span');
-  span.textContent = txt;
-  span.style.cssText = 'font-size:10px; padding:1px 4px; border:1px solid var(--tag-bd); border-radius:3px; background:var(--inner-bg); color:var(--page-fg); white-space:nowrap; line-height:1.2;';
-  if(type==='r') { span.style.borderColor='var(--tag-rare-bd)'; span.style.color='var(--tag-rare-fg)'; }
-  if(type==='e') { span.style.borderColor='var(--tag-epic-bd)'; span.style.color='var(--tag-epic-fg)'; }
-  if(type==='mut') { span.style.borderColor='var(--tag-var-bd)'; span.style.color='var(--tag-var-fg)'; }
-  if(type==='mut-red') { span.style.borderColor='var(--danger-bd)'; span.style.color='var(--danger-fg)'; }
-  bottom.appendChild(span);
-};
-        if(c.mut) addTag(c.mut==='albino'?'白化':'黑化', 'mut');
-        if(c.pie) addTag(c.pieColor==='w'?'白斑':'黑斑', 'mut');
-        if(c.firefly) addTag('萤火虫', 'mut');
-        if(c.sterile) addTag('不育', 'mut-red');
-        if(c.doubleWomb) addTag('双子宫', 'mut');
-        addTag((CL[c.g.col]||CL.n)[0]);
-        addTag((CL[c.g.wingCol]||CL.n)[0]);
-        addTag((CL[c.g.tailCol]||CL.n)[0]);
-        var partsList=['eye','bod','win','tai','hor','leg'];
-        for(var i=0;i<partsList.length;i++){
-          var opt = fo(partsList[i], c.g[partsList[i]]);
-          addTag(opt.n, opt.t);
-        }
-      } else {
-        // 【色块模式】
-        var mutCol=ce('div');mutCol.className='mut-col';
-        var b1=ce('div');b1.className='mut-box'+(c.mut||c.pie?'':' empty');
-        if(c.mut==='albino') b1.style.background='#fff'; else if(c.mut==='melanor') b1.style.background='#111'; else if(c.pie && c.pieColor==='w') b1.style.background='#ddd'; else if(c.pie && c.pieColor==='e') b1.style.background='#333';
-        b1.title=c.mut==='albino'?'一级：白化':c.mut==='melanor'?'一级：黑化':c.pie&&c.pieColor==='w'?'一级：白斑':c.pie&&c.pieColor==='e'?'一级：黑斑':'一级：无'; 
-        mutCol.appendChild(b1);
-        
-        var b2=ce('div');b2.className='mut-box'+(c.firefly?'':' empty');
-        if(c.firefly){b2.style.background='#f1c40f';b2.style.boxShadow='0 0 5px #f1c40f';}
-        b2.title=c.firefly?'二级：萤火虫':'二级：无'; mutCol.appendChild(b2);
-        
-        var b3=ce('div');b3.className='mut-box'+((c.sterile||c.doubleWomb)?'':' empty');
-        if(c.sterile) b3.style.background='#e05a7a'; else if(c.doubleWomb) b3.style.background='#c05a9a';
-        b3.title=c.sterile?'三级：不育':c.doubleWomb?'三级：双子宫':'三级：无';
-        mutCol.appendChild(b3);
-        bottom.appendChild(mutCol);
-
-        var rightGrid = ce('div'); rightGrid.className = 'right-grid';
-        var cb1=ce('div');cb1.className='color-box';cb1.style.background=(CL[c.g.col]||CL.n)[1];cb1.title='体色：'+(CL[c.g.col]||CL.n)[0];
-        var cb2=ce('div');cb2.className='color-box';cb2.style.background=(CL[c.g.wingCol]||CL.n)[1];cb2.title='翼色：'+(CL[c.g.wingCol]||CL.n)[0];
-        var cb3=ce('div');cb3.className='color-box';cb3.style.background=(CL[c.g.tailCol]||CL.n)[1];cb3.title='尾色：'+(CL[c.g.tailCol]||CL.n)[0];
-        rightGrid.appendChild(cb1); rightGrid.appendChild(cb2); rightGrid.appendChild(cb3);
-
-        var partsList=['eye','bod','win','tai','hor','leg'];
-        for(var i=0;i<partsList.length;i++){
-          var pk=partsList[i];var opt=fo(pk,c.g[pk]);
-          var pb=ce('div');pb.className='part-box '+(opt.t==='c'?'c':opt.t==='r'?'r':'e');
-          pb.title=(opt.t==='c'?'常见':opt.t==='r'?'稀有':'罕见')+' '+opt.n;
-          rightGrid.appendChild(pb);
-        }
-        bottom.appendChild(rightGrid);
+    // === 底部色块/文字网格 ===
+    var bottom=ce('div');bottom.className='card-bottom';
+    
+    if(S.displayMode === 'text'){
+      bottom.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; justify-content:center; padding:0 2px;';
+      var addTag = function(txt, type) {
+        var span = ce('span');
+        span.textContent = txt;
+        span.style.cssText = 'font-size:10px; padding:1px 4px; border:1px solid var(--tag-bd); border-radius:3px; background:var(--inner-bg); color:var(--page-fg); white-space:nowrap; line-height:1.2;';
+        if(type==='r') { span.style.borderColor='var(--tag-rare-bd)'; span.style.color='var(--tag-rare-fg)'; }
+        if(type==='e') { span.style.borderColor='var(--tag-epic-bd)'; span.style.color='var(--tag-epic-fg)'; }
+        if(type==='mut') { span.style.borderColor='var(--tag-var-bd)'; span.style.color='var(--tag-var-fg)'; }
+        if(type==='mut-red') { span.style.borderColor='var(--danger-bd)'; span.style.color='var(--danger-fg)'; }
+        bottom.appendChild(span);
+      };
+      if(c.mut) addTag(c.mut==='albino'?'白化':'黑化', 'mut');
+      if(c.pie) addTag(c.pieColor==='w'?'白斑':'黑斑', 'mut');
+      if(c.firefly) addTag('萤火虫', 'mut');
+      if(c.sterile) addTag('不育', 'mut-red');
+      if(c.doubleWomb) addTag('双子宫', 'mut');
+      addTag((CL[c.g.col]||CL.n)[0]);
+      addTag((CL[c.g.wingCol]||CL.n)[0]);
+      addTag((CL[c.g.tailCol]||CL.n)[0]);
+      var partsList=['eye','bod','win','tai','hor','leg'];
+      for(var i=0;i<partsList.length;i++){
+        var opt = fo(partsList[i], c.g[partsList[i]]);
+        addTag(opt.n, opt.t);
       }
+    } else {
+      // 【色块模式】
+      var mutCol=ce('div');mutCol.className='mut-col';
+      var b1=ce('div');b1.className='mut-box'+(c.mut||c.pie?'':' empty');
+      if(c.mut==='albino') b1.style.background='#fff'; else if(c.mut==='melanor') b1.style.background='#111'; else if(c.pie && c.pieColor==='w') b1.style.background='#ddd'; else if(c.pie && c.pieColor==='e') b1.style.background='#333';
+      b1.title=c.mut==='albino'?'一级：白化':c.mut==='melanor'?'一级：黑化':c.pie&&c.pieColor==='w'?'一级：白斑':c.pie&&c.pieColor==='e'?'一级：黑斑':'一级：无'; 
+      mutCol.appendChild(b1);
       
-      // 这一行死死地锁在 if(!isSpecial) 里面！
-      cd.appendChild(bottom);
+      var b2=ce('div');b2.className='mut-box'+(c.firefly?'':' empty');
+      if(c.firefly){b2.style.background='#f1c40f';b2.style.boxShadow='0 0 5px #f1c40f';}
+      b2.title=c.firefly?'二级：萤火虫':'二级：无'; mutCol.appendChild(b2);
+      
+      var b3=ce('div');b3.className='mut-box'+((c.sterile||c.doubleWomb)?'':' empty');
+      if(c.sterile) b3.style.background='#e05a7a'; else if(c.doubleWomb) b3.style.background='#c05a9a';
+      b3.title=c.sterile?'三级：不育':c.doubleWomb?'三级：双子宫':'三级：无';
+      mutCol.appendChild(b3);
+      bottom.appendChild(mutCol);
+
+      var rightGrid = ce('div'); rightGrid.className = 'right-grid';
+      var cb1=ce('div');cb1.className='color-box';cb1.style.background=(CL[c.g.col]||CL.n)[1];cb1.title='体色：'+(CL[c.g.col]||CL.n)[0];
+      var cb2=ce('div');cb2.className='color-box';cb2.style.background=(CL[c.g.wingCol]||CL.n)[1];cb2.title='翼色：'+(CL[c.g.wingCol]||CL.n)[0];
+      var cb3=ce('div');cb3.className='color-box';cb3.style.background=(CL[c.g.tailCol]||CL.n)[1];cb3.title='尾色：'+(CL[c.g.tailCol]||CL.n)[0];
+      rightGrid.appendChild(cb1); rightGrid.appendChild(cb2); rightGrid.appendChild(cb3);
+
+      var partsList=['eye','bod','win','tai','hor','leg'];
+      for(var i=0;i<partsList.length;i++){
+        var pk=partsList[i];var opt=fo(pk,c.g[pk]);
+        var pb=ce('div');pb.className='part-box '+(opt.t==='c'?'c':opt.t==='r'?'r':'e');
+        pb.title=(opt.t==='c'?'常见':opt.t==='r'?'稀有':'罕见')+' '+opt.n;
+        rightGrid.appendChild(pb);
+      }
+      bottom.appendChild(rightGrid);
     }
+    
+    cd.appendChild(bottom);
+  }
 
-    // 新增锁图标行
-if(c.isLocked) {
-  var lockRow = ce('div');
-  lockRow.style.cssText = 'text-align:center; font-size:10px; color:#f1c40f; margin-top:2px; font-weight:bold;';
-  lockRow.textContent = '🔒 已锁定';
-  cd.appendChild(lockRow);
+  if(c.isLocked) {
+    var lockRow = ce('div');
+    lockRow.style.cssText = 'text-align:center; font-size:10px; color:var(--gold); margin-top:2px; font-weight:bold;';
+    lockRow.textContent = '🔒 已锁定';
+    cd.appendChild(lockRow);
+  }
+
+  cd.onclick=(function(id,bb){return function(e){if(e.target.classList&&e.target.classList.contains('mb'))return;if(!bb)return;togSel(id)}})(c.id,isB(c)&&!inArc);
+  return cd;
 }
+function showPotionDetail(storeType, id) {
+  var data = {};
+  if (storeType === '01') {
+    if (id === 'm') data = { icon:'🌟', name:'突变魔药', cost:MP, curType:'🥕', desc:'为未突变的马匹注入白化或黑化的力量。后代有几率遗传。' };
+    if (id === 'v') data = { icon:'🔮', name:'变异魔药', cost:VP, curType:'🥕', desc:'引发深层的基因变异（双头、无眼、多肢、连体）。仅限档案马匹使用，不可逆。' };
+    if (id === 'i') data = { icon:'🍷', name:'诱变魔药', cost:IP, curType:'🥕', desc:'改变马匹的性别认知，使其在繁育时有概率产下雌雄同体的后代。' };
+    if (id === 'fire') data = { icon:'✨', name:'萤火魔药', cost:FP, curType:'✨', desc:'在蛋壳上涂抹发光的魔力，孵化后必定携带二级突变：萤火虫。' };
+    if (id === 'dispel') data = { icon:'💧', name:'消融魔药', cost:DP, curType:'🥕', desc:'洗刷马匹身上的随机一种一级或二级突变（无法消除变异）。' };
+  } else if (storeType === '00') {
+    if (id === 'hfan') data = { icon:'🔥', name:'狂热魔药', cost:50, curType:'🧲', desc:'专为双子宫马匹研制，立刻恢复 5 次繁育次数。' };
+    if (id === 'hfeng') data = { icon:'🌾', name:'丰饶魔药', cost:50, curType:'🧲', desc:'让不育的马匹重获生机，获得 1 次临时繁育机会。' };
+    if (id === 'hmix') data = { icon:'🎲', name:'混合药剂', cost:70, curType:'🧲', desc:'疯狂的炼金产物，彻底随机刷新马匹的体色、翼色和尾色。' };
+    if (id === 'hdrag') data = { icon:'🩸', name:'红龙之血', cost:100, curType:'🧲', desc:'在比赛前饮用，头马的下一次比赛魅力值 +10。' };
+    if (id === 'hnight') data = { icon:'🌙', name:'夜骐魔药', cost:200, curType:'🧲', desc:'头马专属，立刻提升 1~5 级的速度，但不能超过 20 级上限。' };
+  }
 
-cd.onclick=(function(id,bb){return function(e){if(e.target.classList&&e.target.classList.contains('mb'))return;if(!bb)return;togSel(id)}})(c.id,isB(c)&&!inArc);
-return cd;
+  if (!data.name) return;
+
+  var curCount = S.p[id] || 0;
+  if (id === 'fire') curCount = S.points;
+  var haveCur = (data.curType === '🥕') ? S.r : ((data.curType === '✨') ? S.points : (S.hoof||0));
+  
+  var h = '<div class="mdt">'+data.icon+' '+data.name+'</div>';
+  h += '<div style="font-size:13px; color:var(--page-fg); line-height:1.6; margin-bottom:15px; padding:10px; background:var(--inner-bg); border-radius:4px;">'+data.desc+'</div>';
+  h += '<div style="font-size:12px; color:var(--page-dim); margin-bottom:15px; display:flex; justify-content:space-between;">' +
+       '<span>当前持有: <b style="color:var(--gold);">'+curCount+'</b></span>' +
+       '<span>我的资产: <b style="color:var(--carrot);">'+haveCur+' '+data.curType+'</b></span>' +
+       '</div>';
+  h += '<div class="ma"><button id="buyPotBtn" class="primary" style="width:100%; padding:12px; font-size:15px;">花费 '+data.cost+' '+data.curType+' 购买</button></div>';
+  h += '<button class="mc" onclick="closeM()">关闭</button>';
+  
+  showM(h);
+
+  var buyBtn = document.getElementById('buyPotBtn');
+  if (buyBtn) {
+    buyBtn.onclick = function() {
+      if (storeType === '01') buyPot(id);
+      else buyHoofPotion(id);
+      closeM();
+    };
+  }
 }
 function mkStudUI(){var b=$('studBox');b.innerHTML='';var sb=$('studSub');if(!S.stud){sb.textContent='未设置';var tip=ce('div');tip.className='em';tip.style.marginTop='8px';tip.textContent='当前没有种马。';b.appendChild(tip);var candidates=S.c.filter(function(c){return c.sx==='m'&&!c.var&&!c.sterile&&isH(c)&&!c.hasBeenStud});if(candidates.length>0){candidates.sort(function(a,b){return rSFull(b)-rSFull(a)});var best=candidates[0];var recBtn=ce('button');recBtn.className='primary';recBtn.style.cssText='width:100%;margin-top:8px;font-size:12px;padding:10px';recBtn.innerHTML='👑 一键设为种马：'+ (best.name||('第 '+best.gen+'代')) +'（魅力值 '+rSFull(best)+'）';recBtn.onclick=function(){setStud(best.id)};b.appendChild(recBtn);}else{var tip2=ce('div');tip2.className='em';tip2.textContent='马群中没有符合条件的成年雄性。';b.appendChild(tip2)}return}if(S.studL<=0){sb.textContent='已用尽';var tip3=ce('div');tip3.className='em';tip3.textContent='次数已用尽，请更换新种马。';b.appendChild(tip3);var c0=findC(S.stud);if(c0){var w0=ce('div');w0.className='si';w0.appendChild(mkPB(c0));var d0=ce('div');d0.className='sd';d0.innerHTML=(c0.name?'「'+c0.name+'」':'')+'<b>第 '+c0.gen+' 代</b> 次数已用尽';w0.appendChild(d0);b.appendChild(w0)}var candidates2=S.c.filter(function(c){return c.sx==='m'&&!c.var&&!c.sterile&&isH(c)&&!c.hasBeenStud&&c.id!==S.stud});;if(candidates2.length>0){candidates2.sort(function(a,b){return rSFull(b)-rSFull(a)});var best2=candidates2[0];var recBtn2=ce('button');recBtn2.className='primary';recBtn2.style.cssText='width:100%;margin-top:8px;font-size:12px;padding:10px';recBtn2.innerHTML='👑 一键更换新种马：'+ (best2.name||('第 '+best2.gen+'代')) +'（魅力值 '+rSFull(best2)+'）';recBtn2.onclick=function(){setStud(best2.id)};b.appendChild(recBtn2);}return}var c=findC(S.stud);if(!c){S.stud=null;sb.textContent='未设置';b.innerHTML='<div class="em">种马丢失</div>';return}var bonus=headBonus(c);var per=(rS(c)+bonus)*2;sb.textContent='剩余 '+S.studL+'/'+SB;var w=ce('div');w.className='si';w.appendChild(mkPB(c));var d=ce('div');d.className='sd';d.innerHTML=(c.name?'「'+c.name+'」':'')+'<b>第 '+c.gen+' 代</b> 雄性<br>魅力值 <b>'+rS(c)+'/30</b>'+(bonus?' (+'+bonus+' 突变奖励)':'')+'<br>剩余 <b>'+S.studL+'/'+SB+'</b><br>每次产 <b>'+per+'</b>🥕';var btn=ce('button');btn.className='danger';btn.textContent='取消种马'+(S.studL>0?'（'+UNSET_FEE+'🥕）':'');btn.onclick=unsetStud;w.appendChild(d);w.appendChild(btn);b.appendChild(w)}
 function mkStoreUI(){
   // === 1. 渲染马匹（居中对齐，卡片放大版） ===
   var se=$('storeGrid');se.innerHTML='';
+  checkDailyReset(); // 检查重置
+  
+ var headerBar = ce('div');
+// 🌟 删除了假时钟，改为按钮直接靠右对齐
+headerBar.style.cssText = 'display:flex; justify-content:flex-end; align-items:center; width:100%; margin-bottom:10px;';
+
+var btn = ce('button');
+btn.className = 'test';
+btn.style.cssText = 'padding:4px 10px; font-size:12px; min-height:28px; border-radius:4px;';
+btn.textContent = '🔄 立刻刷新 (剩' + S.refreshData.s01 + '/5)';
+if (S.refreshData.s01 <= 0) btn.disabled = true;
+btn.onclick = function() { manualRefresh('01'); };
+headerBar.appendChild(btn);
+se.appendChild(headerBar);
   se.style.cssText = 'display:flex; flex-wrap:wrap; gap:12px; width:100%; justify-content:center; margin-bottom:15px;';
   
   for(var i=0;i<S.st.length;i++){
     (function(idx){
       var it=S.st[idx];
       var cd=ce('div');
-      cd.className='sc'+(it.sold?' sold':'');
+      cd.className='sc'+(it.sold?' sold':'')+(it.hasWing && !it.sold ? ' sc-wing-highlight' : '');
       // 弹性自适应宽度，屏幕越宽卡片越大，最大不超过 160px
       cd.style.cssText = 'padding:10px; gap:6px; display:flex; flex-direction:column; align-items:center; justify-content:space-between; flex: 1 1 110px; max-width: 160px; box-sizing:border-box;';
       
@@ -2305,19 +2645,48 @@ if(cb){
     cc.querySelector('button').onclick=function(){buyCap()};
   }
   cb.appendChild(cc);
+   // 👇 扩建马群分组
+    var gc = ce('div');
+    gc.className='pc';
+    gc.style.cssText='border-color:var(--card-bd);width:100%;max-width:100%;margin-top:8px; padding:10px;';
+    var canBuyGroup = S.groups.length < 5;
+    var canAffordGroup = S.r >= 500;
+    gc.innerHTML = '<div class="ic">🗂️</div>'+
+      '<div class="pn" style="color:var(--accent)">扩建马群分组</div>'+
+      '<div class="pd">当前上限 '+S.groups.length+' / 5<br>花费 500 🥕，增加1个分组</div>'+
+      (canBuyGroup 
+        ? '<button class="buy"'+(canAffordGroup?'':' disabled')+'>🥕 500 扩建</button>'
+        : '<div class="pct" style="color:var(--page-dim)">已达上限</div>');
+    if(canBuyGroup && canAffordGroup){
+      gc.querySelector('button').onclick=function(){
+        S.r -= 500;
+        S.groups.push('New Cave');
+        sv(); render();
+      };
+    }
+    cb.appendChild(gc);
 }
-  // === 4. 药剂部分 (彻底补齐) ===
-  var pg=$('potionGrid');pg.innerHTML='';
-  
-  var mc=ce('div');mc.className='pc';mc.innerHTML='<div class="ic">🌟</div><div class="pn">突变魔药</div><div class="pd">白化/黑化<br>5%遗传</div><button class="buy">🥕 '+MP+'</button><div class="pct">持有 '+S.p.m+'</div>';mc.querySelector('button').onclick=function(){buyPot('m')};pg.appendChild(mc);
+ // === 4. 药剂部分 ===
+var pg=$('potionGrid');
+pg.innerHTML='';
+pg.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:10px; margin-bottom:10px;';
 
-var vc=ce('div');vc.className='pc';vc.innerHTML='<div class="ic">🔮</div><div class="pn">变异魔药</div><div class="pd">双头/无眼<br>多肢/连体</div><button class="buy">🥕 '+VP+'</button><div class="pct">持有 '+S.p.v+'</div>';vc.querySelector('button').onclick=function(){buyPot('v')};pg.appendChild(vc);
+var mkPotCard = function(icon, name, priceStr, id) {
+  var b = ce('div');
+  b.className = 'pc';
+  b.style.cssText = 'width:85px; flex:0 0 85px; padding:10px 4px; cursor:pointer;';
+  b.innerHTML = '<div class="ic" style="font-size:26px;">'+icon+'</div>'+
+                '<div class="pn" style="color:var(--accent); font-size:13px; margin-top:4px; white-space:nowrap;">'+name+'</div>'+
+                '<div class="pd" style="color:var(--page-dim); font-size:11px; margin-top:4px;">'+priceStr+'</div>';
+  b.onclick = function(){ showPotionDetail('01', id); };
+  pg.appendChild(b);
+};
 
-var ic=ce('div');ic.className='pc';ic.style.borderColor='var(--mut)';ic.innerHTML='<div class="ic">🍷</div><div class="pn" style="color:var(--mut)">诱变魔药</div><div class="pd">仅限母马<br>下胎 50% 雌雄同体</div><button class="buy">🥕 '+IP+'</button><div class="pct">持有 '+S.p.i+'</div>';ic.querySelector('button').onclick=function(){buyPot('i')};pg.appendChild(ic);
-
-var fc=ce('div');fc.className='pc';fc.style.borderColor='var(--gold)';fc.innerHTML='<div class="ic">✨</div><div class="pn" style="color:var(--gold)">萤火魔药</div><div class="pd">仅限蛋<br>获得二级突变·萤火虫</div><button class="buy" style="background:var(--test-bg);border-color:var(--gold);color:var(--gold)">✨ '+FP+' 荧光点</button><div class="pct" style="color:var(--gold)">荧光点: '+S.points+'</div>';fc.querySelector('button').onclick=function(){buyPot('fire')};pg.appendChild(fc);
-
-var dc=ce('div');dc.className='pc';dc.style.borderColor='var(--accent)';dc.innerHTML='<div class="ic">💧</div><div class="pn" style="color:var(--accent)">消融魔药</div><div class="pd">随机消除一种<br>一级/二级突变</div><button class="buy" style="background:var(--test-bg);border-color:var(--accent);color:var(--accent)">🥕 '+DP+'</button><div class="pct" style="color:var(--accent)">持有 '+S.p.dispel+'</div>';dc.querySelector('button').onclick=function(){buyPot('dispel')};pg.appendChild(dc);
+mkPotCard('🌟', '突变魔药', '🥕 ' + MP, 'm');
+mkPotCard('🔮', '变异魔药', '🥕 ' + VP, 'v');
+mkPotCard('🍷', '诱变魔药', '🥕 ' + IP, 'i');
+mkPotCard('✨', '萤火魔药', '✨ ' + FP, 'fire');
+mkPotCard('💧', '消融魔药', '🥕 ' + DP, 'dispel');
 
   // === 5. 01 对话刷新 ===
   var now=Date.now();
@@ -2336,7 +2705,8 @@ if(d01&&d00&&!d01.dataset.bound){
   d00.addEventListener('toggle',function(){if(d00.open&&d01.open)d01.open=false});
 }
 function mkArc(){
-  var a=$('arc');a.innerHTML='';
+  var a=$('arc');
+  a.innerHTML='';
   
   // 动态初始化颜色下拉框（防止重复添加）
   var ac = $('arcColor');
@@ -2345,12 +2715,18 @@ function mkArc(){
       var opt=ce('option'); opt.value=CK[i]; opt.textContent=CL[CK[i]][0]; ac.appendChild(opt);
     }
   }
-
+// 如果之前的搜索参数变了，自动回第一页
+  var curFilter = ($('arcName')?$('arcName').value:'') + ($('arcSex')?$('arcSex').value:'') + ($('arcColor')?$('arcColor').value:'') + ($('arcMut')?$('arcMut').value:'');
+  if (window._lastArcFilter !== curFilter) {
+    S.arcPage = 1;
+    window._lastArcFilter = curFilter;
+  }
   var q = ($('arcName')?$('arcName').value.trim().toLowerCase():'');
   var sx = ($('arcSex')?$('arcSex').value:'');
   var col = ($('arcColor')?$('arcColor').value:'');
   var mut = ($('arcMut')?$('arcMut').value:'');
 
+  // 1. 全量检索
   var arr = S.a.filter(function(c) {
     if(sx && c.sx !== sx) return false;
     if(col && c.g.col !== col) return false;
@@ -2373,7 +2749,70 @@ function mkArc(){
   $('arcCount').textContent=arr.length+'/'+S.a.length+' 匹';
   if(S.a.length===0){a.innerHTML='<div class="em">还没保存的马</div>';return}
   if(arr.length===0){a.innerHTML='<div class="em">没有符合条件的马</div>';return}
-  for(var i=0;i<arr.length;i++)a.appendChild(mkCard(arr[i]));
+
+  // 2. 分页计算
+  var totalPages = Math.ceil(arr.length / S.arcPageSize);
+  if(S.arcPage > totalPages) S.arcPage = totalPages;
+  if(S.arcPage < 1) S.arcPage = 1;
+  
+  var startIdx = (S.arcPage - 1) * S.arcPageSize;
+  var pageArr = arr.slice(startIdx, startIdx + S.arcPageSize);
+
+  // 3. 渲染分页工具栏
+  var toolBar = ce('div');
+  toolBar.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 4px; font-size:12px;';
+  
+  var pageSizeSel = ce('select');
+  pageSizeSel.className = 'breed-search';
+  pageSizeSel.style.cssText = 'width:100px; min-height:28px; margin:0;';
+  [24, 36, 48, 72, 114].forEach(function(sz){
+    var opt = ce('option');
+    opt.value = sz; opt.textContent = sz + ' / 页';
+    if(sz === S.arcPageSize) opt.selected = true;
+    pageSizeSel.appendChild(opt);
+  });
+  pageSizeSel.onchange = function(){
+    S.arcPageSize = parseInt(this.value);
+    S.arcPage = 1; // 换页容量重置回第一页
+    mkArc();
+  };
+  toolBar.appendChild(pageSizeSel);
+
+  var pageCtrl = ce('div');
+  pageCtrl.style.cssText = 'display:flex; align-items:center; gap:6px;';
+  
+  var btnPrev = ce('button');
+  btnPrev.className = 'test';
+  btnPrev.style.cssText = 'padding:2px 8px; min-height:24px; font-size:12px;';
+  btnPrev.textContent = '上一页';
+  btnPrev.disabled = (S.arcPage === 1);
+  btnPrev.onclick = function(){ if(S.arcPage > 1){ S.arcPage--; mkArc(); } };
+  
+  var pageInfo = ce('span');
+  pageInfo.style.color = 'var(--page-dim)';
+  pageInfo.textContent = S.arcPage + ' / ' + totalPages;
+  
+  var btnNext = ce('button');
+  btnNext.className = 'test';
+  btnNext.style.cssText = 'padding:2px 8px; min-height:24px; font-size:12px;';
+  btnNext.textContent = '下一页';
+  btnNext.disabled = (S.arcPage === totalPages);
+  btnNext.onclick = function(){ if(S.arcPage < totalPages){ S.arcPage++; mkArc(); } };
+
+  pageCtrl.appendChild(btnPrev);
+  pageCtrl.appendChild(pageInfo);
+  pageCtrl.appendChild(btnNext);
+  toolBar.appendChild(pageCtrl);
+
+  a.appendChild(toolBar);
+
+  // 4. 渲染当前页马匹
+  var gridWrap = ce('div');
+  gridWrap.className = 'gd';
+  for(var i=0; i<pageArr.length; i++) {
+    gridWrap.appendChild(mkCard(pageArr[i]));
+  }
+  a.appendChild(gridWrap);
 }
 var imgObserver = null;
 if (typeof IntersectionObserver !== 'undefined') {
@@ -2608,7 +3047,8 @@ function doBreed(isTest){if(S.sel.length!==2)return;var a=findC(S.sel[0]),b=find
   if(!isTest&&S.c.filter(function(c){return!isH(c)}).length>=(S.eggCap||10)){alert('幼崽栏已满 ('+(S.eggCap||10)+'/'+(S.eggCap||10)+')，请等待孵化');return}
   if(!isTest&&S.c.length>=S.cap){alert('马群已满');return}
   var cost=Math.floor(Math.random()*2)+2;if(!isTest&&S.r<cost){alert('胡萝卜不够 (需要2-3根)');return}
-  var r=breed(a,b);var c=r.c,mus=r.mus;if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
+  var r=breed(a,b);var c=r.c,mus=r.mus;c.group = -1;
+  if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
     {var c2,mus2;if(Math.random()<0.5){c2=JSON.parse(JSON.stringify(c));c2.id=uid();mus2=mus.slice()}else{
       var r2=breed(a,b);c2=r2.c;c2.hat=0;mus2=r2.mus}S.c.push(c2);mkDex(c2);checkAch(c2,mus2,a,b);unlock('twin')}S.sel=[];sv();render()}
 function toggleDisplayMode() {
@@ -3093,6 +3533,7 @@ function cleanExhaustedHorses(){
       var ids = toDelete.map(function(c){return c.id;});
       S.c = S.c.filter(function(c){ return ids.indexOf(c.id) < 0; });
       S.sel = S.sel.filter(function(id){ return ids.indexOf(id) < 0; });
+      S._batchSel = S._batchSel.filter(function(id){ return ids.indexOf(id) < 0; });
       sv(); render();
       alert('清理完毕！');
     }

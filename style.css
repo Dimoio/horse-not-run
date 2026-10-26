@@ -291,21 +291,44 @@ html[data-theme="light"] {
 /* ---------- 3. 组件样式 ---------- */
 body {
   background-color: var(--page-bg);
+  color: var(--page-fg);
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
   background-image: var(--page-bg-image);
   background-size: var(--page-bg-size);
-  background-attachment: fixed;
-  color: var(--page-fg);
+  z-index: -1;
+  pointer-events: none;
+}
+html[data-theme="light"] body::before {
+  display: none;
+}
+
+/* 🌟 商店翅膀高亮 */
+.sc-wing-highlight {
+  box-shadow: 0 0 0 2px var(--gold), 0 0 12px var(--toast-shadow) !important;
+  border-color: var(--gold) !important;
 }
 
 #err {
+  position: fixed; /* 👈 改成悬浮 */
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
   display: none;
   background: var(--err-bg);
   color: var(--err-fg);
-  padding: 8px;
-  margin-bottom: 8px;
+  padding: 8px 16px;
   font-size: 11px;
-  border-radius: 3px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   word-break: break-all;
+  max-width: 90vw;
 }
 
 h1 {
@@ -479,12 +502,14 @@ button:disabled {
 .pxb {
   position: relative;
   width: 100%;
-  padding-top: 100%;
+  aspect-ratio: 1 / 1; /* 👈 锁死正方形 */
+  padding-top: 0;      /* 👈 删掉原来的 padding-top */
   background: var(--horse-bg);
   border: 1px solid transparent;
   border-radius: 3px;
   overflow: hidden;
 }
+
 .pxb canvas {
   position: absolute;
   top: 0;
@@ -1403,4 +1428,97 @@ body {
 .card-new, .dxi {
   pointer-events: auto;
   contain: layout style paint; /* 告诉浏览器这个元素内部变化不影响外部 */
+}
+
+/* ==========================================
+   📦 全局模块化卡片样式 & 分组嵌套 (无分割线版)
+   ========================================== */
+
+/* 1. 所有外层大模块 */
+body > details {
+  margin-bottom: 16px;
+  background: var(--card-bg-solid);
+  border: 1px solid var(--card-bd);
+  border-radius: 8px;
+  padding: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* 外层大模块的标题栏 */
+body > details > summary {
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.03) 0%, transparent 100%);
+  font-size: 15px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+body > details > summary:hover {
+  background: linear-gradient(180deg, rgba(0,0,0,0.06) 0%, transparent 100%);
+}
+
+/* 外层大模块内部的内容区留白 */
+body > details > div:not(.filter):not(.breed-toolbar) {
+  padding: 12px 16px;
+}
+
+/* 2. 内层分组样式（马群里的洞穴） */
+.dex-group {
+  margin-bottom: 16px;
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-bd);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 内层分组标题栏 */
+.dex-group > summary {
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.02);
+}
+
+/* 内层分组的卡片间距 */
+.dex-group > .gd {
+  padding: 12px;
+}
+
+/* ==========================================
+   🎨 日间模式文字加深补丁 (增强对比度)
+   ========================================== */
+html[data-theme="light"] {
+  /* 主标题、高亮文字（比原来的 #8c502b 更深） */
+  --accent: #6b3a1f;
+  --carrot: #6b3a1f;
+  
+  /* 次级文字、说明文字（比原来的 #664229 更深，接近深咖色） */
+  --page-dim: #4a2e1b; 
+  --page-muted: #4a3a2a;
+  
+  /* 金币/数值强调色 */
+  --gold: #362010;
+  
+  /* 马匹名字 */
+  --name: #2b1405;
+  
+  /* 时钟和农场名 */
+  --clock-fg: #4a2e1b;
+  --farm-name-fg: #362010;
+  --hoof-fg: #4a2e1b;
+
+  /* 繁育和商店里的绿/红等状态文字也加深一点，防止在白底上看不清 */
+  --st-ready: #155a30;
+  --st-used: #7a1530;
+  --temp-breed-fg: #155a30;
+  --redragon-fg: #8a1a1a;
+  --sterile: #8a1a1a;
+}
+
+/* 防止加载前高度为0，加载后瞬间撑开导致 CLS */
+body > details {
+  min-height: 80px; 
+}
+#list, #hatch {
+  min-height: 200px;
 }
