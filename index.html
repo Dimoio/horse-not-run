@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <script>
-  // 提前把主题 class 挂到 html 上
-  if (localStorage.getItem('wd_theme_mode') === 'light') {
-    document.documentElement.classList.add('light-mode-html');
-  }
+  (function () {
+    var t = localStorage.getItem('wd_theme_mode') || 'dark';
+    document.documentElement.dataset.theme = t;
+    if (t === 'light') document.documentElement.classList.add('light-mode-html');
+  })();
 </script>
 <style>
-  /* 如果 html 带有 light-mode-html，直接在渲染的最初阶段铺满沙土色 */
-  html.light-mode-html, html.light-mode-html body {
-    background-color: #a38f73 !important;
-  }
+  html[data-theme="light"],
+  html[data-theme="light"] body { background-color: #a38f73 !important; }
+  html[data-theme="dark"],
+  html[data-theme="dark"] body { background-color: #14121f !important; }
 </style>
 <head>
 <meta charset="UTF-8">
@@ -28,10 +29,10 @@
 <h1><img src="images/horse.png" class="logo-icon" alt="">马儿不跑</h1>
 
 <div class="meta">v1.20 Beta 内测 by 01 非常感谢你的游玩！上次更新：2026.10.25 如有兴趣参加Beta测试，可加入我们的QQ群：419101070</div>
-<div id="farmNameBox" style="text-align: center; font-size: 14px; color: #f1c40f; margin-top: 5px; margin-bottom: 5px; cursor: pointer; max-width: 80%; margin-left: auto; margin-right: auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" onclick="editFarmName()" title="点击修改马场名字">🏡 我的马场</div>
+<div id="farmNameBox" style="text-align: center; font-size: 14px; color: var(--farm-name-fg); margin-top: 5px; margin-bottom: 5px; cursor: pointer; max-width: 80%; margin-left: auto; margin-right: auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" onclick="editFarmName()" title="点击修改马场名字">🏡 我的马场</div>
 <div class="tb">
   <span id="stat"></span>
-  <span id="globalClock" style="font-size:12px; color:#f0a04b; font-weight:bold; margin-right:8px;"></span>
+  <span id="globalClock" style="font-size:12px; color:var(--clock-fg); font-weight:bold; margin-right:8px;"></span>
   <button id="toggleModeBtn" onclick="toggleDisplayMode()" style="font-size:12px; padding:4px 8px; min-height:30px;">🔳 色块模式</button>
  <button id="svBtn">💾 存档选项</button>
  <button id="quickSvBtn" style="background:#2a3d2a; border-color:#4a7a4a; color:#a0e0a0;">⚡ 极速保存</button>
@@ -152,7 +153,7 @@
   <div class="store-layout">
     <div class="shopkeeper" id="shop00">
       <img src="images/00.png" alt="00" class="k01-img" style="transform: scaleX(-1);">
-      <div class="k01-dialogue" id="k00Text" style="border-color:#888;color:#ccc;">...</div>
+      <div class="k01-dialogue" id="k00Text" style="border-color:var(--dialogue-bd);color:var(--dialogue-fg);">...</div>
     </div>
     <div class="store-main">
       <div id="store00Grid" class="gd3"></div>
@@ -191,8 +192,8 @@
 
 <details open>
   <summary>📖 图鉴 <span id="dexCount" class="sb"></span></summary>
-  <input id="dexSearch" placeholder="搜索部件名（例如：龙翼）" style="background:#232135;color:#e6e6e6;border:1px solid #38345a;padding:6px 8px;border-radius:4px;font-family:inherit;font-size:12px;width:100%;margin-bottom:8px;min-height:32px;box-sizing:border-box">
-<div id="dex"></div>
+  <input id="dexSearch" class="dex-search" placeholder="搜索部件名（例如：龙翼）">
+  <div id="dex"></div>
 </details>
 
 <details open>
