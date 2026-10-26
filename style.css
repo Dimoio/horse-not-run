@@ -1384,7 +1384,23 @@ option {
   font-size: 24px;
   margin: 0;
 }
-/* 滚动性能优化 */
-body { transform: translateZ(0); -webkit-backface-visibility: hidden; backface-visibility: hidden; }
-.breed-list, .gd, .dxl { will-change: transform; -webkit-overflow-scrolling: touch; }
-.card-new, .dxi { contain: layout style paint; }
+/* ==========================================
+   🚀 滚动性能优化 (修复 fixed 弹窗偏移版)
+   ========================================== */
+/* 1. 不要给 body 加 transform，否则会让弹窗/底栏脱离屏幕 */
+body {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* 2. 繁育列表和马匹列表开启滚动惯性，减少重绘 */
+.breed-list, .gd, .dxl {
+  will-change: transform;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 3. 停止不需要的事件捕获 */
+.card-new, .dxi {
+  pointer-events: auto;
+  contain: layout style paint; /* 告诉浏览器这个元素内部变化不影响外部 */
+}
