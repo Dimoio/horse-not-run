@@ -1612,3 +1612,27 @@ body > details {
   .card-top { font-size: 7px !important; }
   .name-row { font-size: 8px !important; }
 }
+/* ==========================================
+   📱 手机端卡片头部终极瘦身（最高优先级）
+   ========================================== */
+@media (max-width: 768px) {
+  /* 1. 暴力隐藏代数和魅力，连占位都不留 */
+  .card-top .hide-mobile {
+    display: none !important;
+  }
+  
+  /* 2. 让剩下的繁育次数（或皇冠）强制居中 */
+  .card-top {
+    display: flex !important;
+    justify-content: center !important; 
+    align-items: center !important;
+    padding: 0 !important;
+  }
+  
+  /* 3. 确保繁育次数占满整行，彻底居中 */
+  .card-top .bc {
+    flex: 1 !important;
+    text-align: center !important;
+  }
+}
+
