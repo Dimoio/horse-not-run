@@ -1635,29 +1635,91 @@ body > details {
     text-align: center !important;
   }
 }
-
 /* ==========================================
-   📱 手机端卡片头部纯 CSS 暴力瘦身
+   📱 移动端终极暴力补丁 (下拉框防瞎 + 保留药水 + 暴力隐藏)
    ========================================== */
+
 @media (max-width: 768px) {
-  /* 强制隐藏顶部栏的首尾元素（也就是代数和魅力） */
+  /* 1. 暴力修复下拉框“白底白字” */
+  select, option {
+    background-color: var(--card-bg-solid) !important; 
+    color: var(--page-fg) !important;
+    -webkit-text-fill-color: var(--page-fg) !important;
+  }
+  select {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background-image: linear-gradient(45deg, transparent 50%, var(--page-dim) 50%), linear-gradient(135deg, var(--page-dim) 50%, transparent 50%) !important;
+    background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50% !important;
+    background-size: 5px 5px, 5px 5px !important;
+    background-repeat: no-repeat !important;
+    padding-right: 25px !important;
+  }
+
+  /* 2. 🌟 暴力隐藏代数和魅力 (最高权重，无视内联样式) */
+  .card-new .card-top .hide-mobile,
   .card-top > span:first-child,
   .card-top > span:last-child {
     display: none !important;
   }
   
-  /* 让剩下的繁育次数（或皇冠）绝对居中 */
-  .card-top {
+  /* 强制剩下的繁育次数居中 */
+  .card-new .card-top {
     display: flex !important;
-    justify-content: center !important; 
+    justify-content: center !important;
     align-items: center !important;
+    height: 14px !important;
+    font-size: 9px !important;
     padding: 0 !important;
-    height: 16px !important;
   }
-  
-  /* 繁育次数稍微放大一点点，填补空白 */
-  .card-top .bc {
-    font-size: 11px !important;
+  .card-new .card-top .bc {
+    flex: 1 !important;
     text-align: center !important;
   }
+
+  /* 3. 卡片瘦身，保留色块和药水栏 */
+  .card-new {
+    padding: 4px !important;
+    gap: 2px !important;
+  }
+  
+  .pxb {
+    margin: 1px 0 !important;
+  }
+
+  .name-row {
+    font-size: 10px !important;
+    height: 14px !important;
+    line-height: 14px !important;
+    margin: 0 !important;
+  }
+
+  .sex-row {
+    height: 14px !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+  }
+
+  /* 🌟 药水栏保留，但缩小 */
+  .status-row {
+    height: 12px !important;
+    font-size: 10px !important;
+    margin-top: 0 !important;
+  }
+
+  /* 4. 色块区极限压缩 */
+  .card-bottom {
+    display: grid !important;
+    grid-template-columns: 10px 1fr !important;
+    gap: 2px !important; 
+    padding-top: 1px !important; 
+    margin-top: 1px !important;
+  }
+  
+  .mut-col { gap: 1px !important; }
+  .mut-box { width: 10px !important; height: 8px !important; border-width: 1px !important; }
+  
+  .right-grid { gap: 2px !important; }
+  .color-box { width: 10px !important; height: 10px !important; border-width: 1px !important; }
+  .part-box { height: 4px !important; border-width: 1px !important; }
 }
