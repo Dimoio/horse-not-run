@@ -1636,3 +1636,28 @@ body > details {
   }
 }
 
+/* ==========================================
+   📱 手机端卡片头部纯 CSS 暴力瘦身
+   ========================================== */
+@media (max-width: 768px) {
+  /* 强制隐藏顶部栏的首尾元素（也就是代数和魅力） */
+  .card-top > span:first-child,
+  .card-top > span:last-child {
+    display: none !important;
+  }
+  
+  /* 让剩下的繁育次数（或皇冠）绝对居中 */
+  .card-top {
+    display: flex !important;
+    justify-content: center !important; 
+    align-items: center !important;
+    padding: 0 !important;
+    height: 16px !important;
+  }
+  
+  /* 繁育次数稍微放大一点点，填补空白 */
+  .card-top .bc {
+    font-size: 11px !important;
+    text-align: center !important;
+  }
+}
