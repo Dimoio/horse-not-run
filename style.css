@@ -1522,3 +1522,93 @@ body > details {
 #list, #hatch {
   min-height: 200px;
 }
+
+/* --- 🖥️ 平板端 (768px - 1024px) --- */
+@media (max-width: 1024px) {
+  .gd { gap: 10px !important; }
+  .card-new { padding: 6px !important; }
+}
+
+@media (max-width: 768px) {
+  /* 1. 核心：最小 90px，最大化利用手机屏幕宽度，一行自动排 3~4 个 */
+  .gd {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)) !important;
+    gap: 6px !important; 
+  }
+
+  .card-new {
+    padding: 4px !important;
+    gap: 2px !important;
+  }
+
+  /* 2. 顶部栏：禁止换行，防止重叠 */
+  .card-top {
+    font-size: 8px !important;
+    height: 12px !important;
+    line-height: 12px !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  /* 3. 名字栏：强制居中 + 严格限制勾选框 */
+  .name-row {
+    font-size: 9px !important;
+    height: 13px !important;
+    line-height: 13px !important;
+    margin: 1px 0 !important;
+  }
+  
+  /* 强制限制勾选框大小，防止在小屏上撑破卡片 */
+  .name-row input[type="checkbox"] {
+    width: 12px !important;
+    height: 12px !important;
+    left: 0 !important;
+  }
+
+  /* 4. 性别行 */
+  .sex-row {
+    height: 14px !important;
+    margin: 0 !important;
+  }
+  .sex-icon {
+    font-size: 9px !important;
+  }
+
+  /* 5. 隐藏非必要的状态行（如药水生效图标） */
+  .status-row { display: none !important; }
+
+  /* 6. 底部色块网格极度压缩 */
+  .card-bottom {
+    padding-top: 1px !important;
+    margin-top: 1px !important;
+    gap: 2px !important;
+    grid-template-columns: 10px 1fr !important; 
+  }
+  .mut-box { width: 10px !important; height: 8px !important; border-width: 1px !important; }
+  .right-grid { gap: 1px !important; }
+  .color-box { width: 9px !important; height: 9px !important; border-width: 1px !important; }
+  .part-box { height: 4px !important; border-width: 1px !important; }
+
+  /* 7. 右上角菜单按钮缩小 */
+  .card-new .mb {
+    top: 2px !important;
+    right: 2px !important;
+    width: 16px !important;
+    height: 16px !important;
+    line-height: 14px !important;
+    font-size: 10px !important;
+    border-radius: 3px !important;
+  }
+}
+
+/* 极小屏 (如 iPhone SE) 的极限压缩 */
+@media (max-width: 380px) {
+  .gd {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) !important;
+    gap: 4px !important;
+  }
+  .card-top { font-size: 7px !important; }
+  .name-row { font-size: 8px !important; }
+}

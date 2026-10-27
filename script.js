@@ -5,7 +5,7 @@ function sv(){
   var d={
     farmName:S.farmName, c:S.c, a:S.a, d:S.d, r:S.r, p:S.p, st:S.st, 
     stT:S.stT, st00T:S.st00T, stud:S.stud, studL:S.studL, studT:S.studT, 
-    studN:S.studN, ach:S.ach, cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap, eggCap:S.eggCap,head:S.head, headStart:S.headStart, 
+    studN:S.studN, ach:S.ach, cap:S.cap, defaultHatchGroup:S.defaultHatchGroup, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap, eggCap:S.eggCap,head:S.head, headStart:S.headStart, 
     headRace:S.headRace, headLastTick:S.headLastTick, headTerm:S.headTerm, 
     points:S.points, hoof:S.hoof, trainCount:S.trainCount, hoofSubmitted:S.hoofSubmitted, 
     trainFail:S.trainFail, trainSuccess:S.trainSuccess, unlocked00:S.unlocked00, 
@@ -26,6 +26,7 @@ function al(d){
   S.points = d.points || 0;
   S.hoof = d.hoof || 0;
   S.cap = d.cap || 50;
+  S.defaultHatchGroup = d.defaultHatchGroup !== undefined ? d.defaultHatchGroup : -1;
     S.groups = d.groups || ['New Cave'];
   // 🌟 强制去重，防止旧档数据重复
   S.groups = S.groups.filter(function(item, pos, self) {
@@ -351,148 +352,149 @@ function cdTime(c){var base;var s=rS(c);if(s<11)base=600000;else if(s<21)base=12
 function getMaxBc(c){return c.doubleWomb?10:MBC}
 function canB(c){if(c.var)return false;if(c.sterile&&!c.tempBreed)return false;if(c.tempBreed)return c.cd<=Date.now();return c.bc<getMaxBc(c)&&c.cd<=Date.now()}
 function stTx(c){if(!isH(c)){var s=Math.ceil((c.hat-Date.now())/1000);return{text:'孵化 '+s+'s',cls:'hatch'}}if(c.var)return{text:'变异体·不可繁殖',cls:'used'};if(c.sterile&&!c.tempBreed)return{text:'不育·不可繁殖',cls:'used'};if(c.tempBreed)return{text:'临时繁育 1/1',cls:'ready'};if(c.bc>=getMaxBc(c))return{text:'已用尽',cls:'used'};if(c.cd>Date.now()){var s2=Math.ceil((c.cd-Date.now())/1000);return{text:'冷却 '+Math.floor(s2/60)+':'+String(s2%60).replace(/^(\d)$/,'0$1'),cls:'cool'}}return{text:'可繁育 '+(getMaxBc(c)-c.bc)+'/'+getMaxBc(c),cls:'ready'}}
-// ==== breed 1.20 遗传矩阵 ====
+// ==== breed 1.21 遗传矩阵 ====
 function breed(a, b) {
   var g = {}, mus = [];
-  var RK_all = ['bod','leg','hor','tai','eye']; // 翅膀单走
   
-  // 🌟 1. 翅膀的真实遗传
+  // 🌟 1. 翅膀独立遗传机制 (不参与品级和 5% 突变判定)
   var aHasW = a.g.win !== 'none', bHasW = b.g.win !== 'none';
-  var cHasW = false;
+  var cHasW = false, targetWing = 'none';
   
-  if(!aHasW && !bHasW) { cHasW = false; }
-  else if(aHasW && bHasW) { cHasW = Math.random() < 0.50; }
-  else { cHasW = Math.random() < 0.10; }
-  
-  if(cHasW){
-    // 如果有翅膀，直接继承父母其中一方的具体翅膀
-    if(aHasW && bHasW) g.win = Math.random() < 0.5 ? a.g.win : b.g.win;
-    else if(aHasW) g.win = a.g.win;
-    else g.win = b.g.win;
+  if (!aHasW && !bHasW) {
+    cHasW = false; // 无 + 无 = 100% 无
+  } else if (aHasW && bHasW) {
+    if (a.g.win === b.g.win) {
+      // 同类型：70% 遗传
+      if (Math.random() < 0.70) { cHasW = true; targetWing = a.g.win; }
+    } else {
+      // 不同类型：50% 遗传一方
+      if (Math.random() < 0.50) { cHasW = true; targetWing = Math.random() < 0.5 ? a.g.win : b.g.win; }
+    }
   } else {
-    g.win = 'none';
+    // 有 + 无 = 10% 遗传
+    if (Math.random() < 0.10) { cHasW = true; targetWing = aHasW ? a.g.win : b.g.win; }
   }
+  g.win = cHasW ? targetWing : 'none';
 
-  // 🌟 2. 其他部件的真实遗传
+  // 🌟 2. 其他部件的硬核遗传矩阵与突变判定
+  var RK_all = ['bod','leg','hor','tai','eye'];
+  var tiers = ['c', 'r', 'e']; // 0普通, 1稀有, 2罕见
+
   for(var i=0; i<RK_all.length; i++){
     var k = RK_all[i];
     var o1 = fo(k, a.g[k]), o2 = fo(k, b.g[k]);
-    var t1 = o1.t, t2 = o2.t; // c=普通, r=稀有, e=罕见
+    var t1 = tiers.indexOf(o1.t);
+    var t2 = tiers.indexOf(o2.t);
     
-    // 先 50% 概率随机决定继承谁的底子
-    var base = Math.random() < 0.5 ? o1 : o2;
-    var cT = base.t; 
-    
-   // 🌟 1.20 最终版繁育矩阵
-if(t1 === 'c' && t2 === 'c') {
-  cT = 'c';
-}
-else if(t1 === 'c' && t2 === 'r') {
-  cT = Math.random() < 0.30 ? 'r' : 'c'; 
-}
-else if(t1 === 'r' && t2 === 'c') {
-  cT = Math.random() < 0.30 ? 'r' : 'c';
-}
-else if(t1 === 'c' && t2 === 'e') {
-  var r = Math.random();
-  cT = r < 0.05 ? 'e' : (r < 0.40 ? 'r' : 'c'); 
-}
-else if(t1 === 'e' && t2 === 'c') {
-  var r = Math.random();
-  cT = r < 0.05 ? 'e' : (r < 0.40 ? 'r' : 'c');
-}
-else if(t1 === 'r' && t2 === 'r') {
-  cT = Math.random() < 0.30 ? 'c' : 'r'; 
-}
-else if(t1 === 'r' && t2 === 'e') {
-  var r = Math.random();
-  cT = r < 0.20 ? 'c' : (r < 0.80 ? 'r' : 'e'); 
-}
-else if(t1 === 'e' && t2 === 'r') {
-  var r = Math.random();
-  cT = r < 0.20 ? 'c' : (r < 0.80 ? 'r' : 'e');
-}
-else if(t1 === 'e' && t2 === 'e') {
-  var r = Math.random();
-  cT = r < 0.10 ? 'c' : (r < 0.60 ? 'r' : 'e'); 
-}
-    // 🌟 3. 5% 随机突变（严格限制：越级一次只能越一级）
-var isMutated = false;
-if(Math.random() < MR){
-  mus.push(k);
-  isMutated = true;
-  var rMut = Math.random();
-  
-  if(rMut < 0.50) { 
-    // 50% 向下突变（只能降一级）
-    cT = cT === 'e' ? 'r' : (cT === 'r' ? 'c' : 'c'); 
-  } else if(rMut >= 0.95) { 
-    // 5% 向上突变（只能升一级）
-    cT = cT === 'c' ? 'r' : (cT === 'r' ? 'e' : 'e'); 
-  } else { 
-    // 45% 同级突变（品级完全不变）
-    cT = cT; 
-  }
-}
-   
-    
-    // 🌟 4. 核心：根据最终品级决定具体部件
-    if (cT === base.t && !isMutated) {
-      // 如果品级和底子一样，且没突变，直接完美继承！
-      g[k] = base.k;
-    } else if (cT === base.t && isMutated) {
-      // 如果突变了，但品级没变（比如稀有突变成同级的另一个稀有），就从该品级里随机抽一个不同的
-      var samePool = P[k].o.filter(function(o){return o.t === cT && o.k !== base.k});
-      g[k] = samePool.length > 0 ? pk(samePool).k : base.k;
-    } else {
-      // 如果品级变了（退化或升阶），就从新品级的池子里随机抽一个
-      var pool = P[k].o.filter(function(o){return o.t === cT});
-      if(pool.length === 0) pool = P[k].o;
+    // 基础矩阵判定 (1-6)
+    var baseTier = 0;
+    if (t1 === 0 && t2 === 0) {
+      baseTier = 0; // 100% 普通
+    } else if ((t1 === 0 && t2 === 1) || (t1 === 1 && t2 === 0)) {
+      baseTier = Math.random() < 0.50 ? 0 : 1; // 50% 普通, 50% 稀有
+    } else if (t1 === 1 && t2 === 1) {
+      baseTier = Math.random() < 0.30 ? 0 : 1; // 30% 普通, 70% 稀有
+    } else if ((t1 === 0 && t2 === 2) || (t1 === 2 && t2 === 0)) {
+      var r = Math.random();
+      baseTier = r < 0.60 ? 0 : (r < 0.90 ? 1 : 2); // 60% 普, 30% 稀, 10% 罕
+    } else if ((t1 === 1 && t2 === 2) || (t1 === 2 && t2 === 1)) {
+      var r = Math.random();
+      baseTier = r < 0.10 ? 0 : (r < 0.70 ? 1 : 2); // 10% 普, 60% 稀, 30% 罕
+    } else if (t1 === 2 && t2 === 2) {
+      baseTier = Math.random() < 0.30 ? 1 : 2; // 30% 稀有, 70% 罕见
+    }
+
+    var finalTier = baseTier;
+    var isMutated = false;
+    var mutationType = 'none'; 
+
+    // 5% 随机突变判定
+    if (Math.random() < 0.05) {
+      isMutated = true;
+      mus.push(k); // 记录突变（用于成就判定）
+      var rMut = Math.random();
+      if (rMut < 0.10) {
+        finalTier = Math.max(0, baseTier - 1);
+        mutationType = 'down'; // 向下突变
+      } else if (rMut >= 0.90) {
+        finalTier = Math.min(2, baseTier + 1);
+        mutationType = 'up';   // 向上突变
+      } else {
+        finalTier = baseTier;
+        mutationType = 'same'; // 同级突变
+      }
+    }
+
+    var finalTierStr = tiers[finalTier];
+
+    // 🌟 决定具体部件（严格控制“无中生有”）
+    if (isMutated && (mutationType === 'up' || mutationType === 'down')) {
+      // 发生了升降级：直接去新的品级池子里随机抽一个
+      var pool = P[k].o.filter(function(o){ return o.t === finalTierStr; });
       g[k] = pk(pool).k;
-    }
-  }
-  
-  // 🌟 5. 颜色遗传与偏移突变
-   var colList = [a.g.col, b.g.col];
-var cCol = Math.random() < 0.5 ? colList[0] : colList[1];
-
-if (Math.random() < MR) { 
-  var parts = cCol.split('_');
-  var family = parts[0]; 
-  
-  var sameFam = CK.filter(function(c){ return c.indexOf(family) === 0; });
-  
-  // 黑白单色无同系色阶，或触发5%跨系突变时，从标准色池抽取
-  if (sameFam.length <= 1 || Math.random() >= 0.95) {
-    var allKeys = Object.keys(CL);
-    var stdPool = allKeys.filter(function(c){ 
-      return (c.indexOf('_std') !== -1 || c.indexOf('standard') !== -1) && c !== cCol; // 🌟 核心修复：不能抽到它自己！
-    });
-    
-    // 兜底：如果标准色池为空，则从所有常规颜色中随机（排除特殊色和自身）
-    if (stdPool.length === 0) {
-      stdPool = allKeys.filter(function(c){ 
-        return c !== 'special_albino' && c !== 'special_melanor' && c !== cCol; 
+    } else if (isMutated && mutationType === 'same') {
+      // 发生了同级突变：尝试寻找不同于父母的同级部件
+      var samePool = P[k].o.filter(function(o){
+        return o.t === finalTierStr && o.k !== o1.k && o.k !== o2.k;
       });
+      if (samePool.length > 0) {
+        g[k] = pk(samePool).k;
+      } else {
+        // 没有别的同级部件，只能保持原样
+        g[k] = (finalTier === t1) ? o1.k : o2.k;
+      }
+    } else {
+      // 未发生突变
+      if (finalTier !== t1 && finalTier !== t2) {
+        // 基础矩阵导致了降级（比如双罕见出了稀有），去对应池子抽
+        var pool = P[k].o.filter(function(o){ return o.t === finalTierStr; });
+        g[k] = pk(pool).k;
+      } else {
+        // 正常遗传：父母的品级对得上，直接继承（如果双方同级，50%概率选父/母）
+        if (finalTier === t1 && finalTier === t2) {
+          g[k] = Math.random() < 0.5 ? o1.k : o2.k;
+        } else if (finalTier === t1) {
+          g[k] = o1.k;
+        } else {
+          g[k] = o2.k;
+        }
+      }
     }
-    
-    cCol = pk(stdPool);
-  } else {
-    // 同色系偏移（也要排除它自己）
-    var validFam = sameFam.filter(function(c){ return c !== cCol; });
-    cCol = pk(validFam.length > 0 ? validFam : sameFam);
   }
-  mus.push('col');
-}
+  
+  // 🌟 3. 颜色遗传与偏移突变 (保留原机制)
+  var colList = [a.g.col, b.g.col];
+  var cCol = Math.random() < 0.5 ? colList[0] : colList[1];
 
-// 兜底：防止颜色值为空
-if (!cCol) cCol = 'grey_std';
+  if (Math.random() < MR) { 
+    var parts = cCol.split('_');
+    var family = parts[0]; 
+    var sameFam = CK.filter(function(c){ return c.indexOf(family) === 0; });
+    
+    if (sameFam.length <= 1 || Math.random() >= 0.95) {
+      var allKeys = Object.keys(CL);
+      var stdPool = allKeys.filter(function(c){ 
+        return (c.indexOf('_std') !== -1 || c.indexOf('standard') !== -1) && c !== cCol;
+      });
+      if (stdPool.length === 0) {
+        stdPool = allKeys.filter(function(c){ 
+          return c !== 'special_albino' && c !== 'special_melanor' && c !== cCol; 
+        });
+      }
+      cCol = pk(stdPool);
+    } else {
+      var validFam = sameFam.filter(function(c){ return c !== cCol; });
+      cCol = pk(validFam.length > 0 ? validFam : sameFam);
+    }
+    mus.push('col');
+  }
+  if (!cCol) cCol = 'grey_std';
 
-g.col = cCol;
-g.wingCol = Math.random() < 0.5 ? a.g.wingCol : b.g.wingCol;
-g.tailCol = Math.random() < 0.5 ? a.g.tailCol : b.g.tailCol;
+  g.col = cCol;
+  g.wingCol = Math.random() < 0.5 ? a.g.wingCol : b.g.wingCol;
+  g.tailCol = Math.random() < 0.5 ? a.g.tailCol : b.g.tailCol;
 
-  // 🌟 6. 突变叠加（白化/黑化/斑点等）
+  // 🌟 4. 一级/二级/三级突变叠加 (保留原机制)
   var cm=null;
   if(a.mut==='albino'&&b.mut==='albino'&&Math.random()<0.20)cm='albino';
   else if(a.mut==='melanor'&&b.mut==='melanor'&&Math.random()<0.20)cm='melanor';
@@ -533,9 +535,12 @@ g.tailCol = Math.random() < 0.5 ? a.g.tailCol : b.g.tailCol;
     pieColor:pieColor,firefly:ff,induceHerm:false,sterile:st,doubleWomb:dw
   };
   c.hat=Date.now()+calcHatchTime(c);
-  return{c:c,mus:mus,a:a,b:b}
+  
+  // 底层直接分配分组
+  c.group = (typeof S.defaultHatchGroup === 'number' && S.defaultHatchGroup < S.groups.length) ? S.defaultHatchGroup : -1;
+  
+  return{c:c,mus:mus,a:a,b:b};
 }
-
 function predRarity(a,b){var rk=RK.concat(['col']);var lo=0,hi=0;for(var i=0;i<rk.length;i++){var k=rk[i];if(k==='col')continue;var o1=fo(k,a.g[k]),o2=fo(k,b.g[k]);var w1=o1.t==='e'?5:o1.t==='r'?2:0;var w2=o2.t==='e'?5:o2.t==='r'?2:0;lo+=Math.min(w1,w2);hi+=Math.max(w1,w2)}return[lo,hi]}
 
 // ==== getPal ====
@@ -1039,6 +1044,7 @@ var S = {
   studN: 0,
   ach: {},
   cap: 50,
+  defaultHatchGroup: -1,
   groups: ['New Cave'],
   groupOpen: { '-1': true, '0': true }, // 记录折叠状态
   _batchSel: [], // 批量选中的马匹ID
@@ -1621,30 +1627,41 @@ function mkStore(force){
   var now=Date.now();
   // 只要时间没到，哪怕你买空了商店，也绝对不刷新！
   if(!force && S.stT && now-S.stT<SRM) return; 
+  
   S.st=[];
+  var hasWingInStore = false; // 👈 新加的：用来记录这批马有没有翅膀
+
   for(var i=0;i<SSZ;i++){
     var c=newC(0,{inst:true,store:true});
     if(c.sx==='h')c.sx=pk(['m','f']);
     c.mut=null;c.pie=false;c.firefly=false;c.sterile=false;c.doubleWomb=false;
-if(Math.random() >= 0.10) { c.g.win = 'none'; } // 🌟 90%概率无翅
+    
+  if(Math.random() >= 0.15) { c.g.win = 'none'; } // 85%概率无翅，15%概率有翅
+    // 翅膀价格暴增判定
+    var wingOpt = fo('win', c.g.win);
+    var wingBonus = 0;
+    if (wingOpt.k !== 'none') {
+      if (wingOpt.t === 'c') wingBonus = 100;       // 小翼
+      else if (wingOpt.t === 'r') wingBonus = 200;  // 稀有翼
+      else if (wingOpt.t === 'e') wingBonus = 500;  // 龙翼
+    }
 
-// 🌟 翅膀价格暴增判定
-var wingOpt = fo('win', c.g.win);
-var wingBonus = 0;
-if (wingOpt.k !== 'none') {
-  if (wingOpt.t === 'c') wingBonus = 100;       // 小翼
-  else if (wingOpt.t === 'r') wingBonus = 200;  // 稀有翼
-  else if (wingOpt.t === 'e') wingBonus = 500;  // 龙翼
-}
-
-// 基础价 + 魅力加成 + 翅膀溢价
- c.price = 15 + Math.floor(rSFull(c) * 1.5) + wingBonus;
-    c.hasWing = wingOpt.k !== 'none'; // 👈 加上这个标记
+    // 基础价 + 魅力加成 + 翅膀溢价
+    c.price = 15 + Math.floor(rSFull(c) * 1.5) + wingBonus;
+    c.hasWing = wingOpt.k !== 'none'; 
+    
+    if (c.hasWing) {
+      hasWingInStore = true; // 👈 只要有一只带翅膀，就记录下来
+    }
+    
     S.st.push(c);
   }
-  if (c.hasWing) {
-      setTimeout(function(){ showToast('✨ 商店似乎进了一批带翅膀的好货！', true); }, 500);
-    }
+  
+  // 👈 循环结束后，统一判断要不要弹提示
+  if (hasWingInStore) {
+    setTimeout(function(){ showToast('✨ 商店似乎进了一批带翅膀的好货！', true); }, 500);
+  }
+  
   S.stT=now;
 }
 function buyStore(i){var it=S.st[i];if(!it||it.sold)return;if(S.r<SPR){alert('胡萝卜不够');return}if(S.c.length>=S.cap){alert('马群已满');return}S.r-=SPR;it.sold=true;
@@ -1889,7 +1906,7 @@ function dlExp(){
   customName = customName.replace(/[\/\\:*?"<>|]/g, '_'); // 过滤非法字符
 
   var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,
-    cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
+      cap:S.cap, defaultHatchGroup:S.defaultHatchGroup, defaultHatchGroup:S.defaultHatchGroup,groups:S.groups, groupOpen:S.groupOpen, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
     headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,displayMode:S.displayMode};
   
   var jsonString = JSON.stringify(d);
@@ -1939,7 +1956,7 @@ function doImp(t){
     if(!d.c)throw new Error('无效的存档文件（缺少核心马匹数据）');
 
     S.c=d.c||[]; S.a=d.a||[]; S.d=d.d||{}; S.r=d.r!=null?d.r:20;
-    S.farmName=d.farmName||'我的马场'; S.points=d.points||0;S.cap=d.cap||50; S.groups=d.groups||['New Cave']; S.groupOpen=d.groupOpen||{'-1':true,'0':true}; S.eggCap=d.eggCap||10; S.ach=d.ach||{};
+    S.farmName=d.farmName||'我的马场'; S.points=d.points||0;S.cap=d.cap||50;S.defaultHatchGroup=d.defaultHatchGroup||-1; S.groups=d.groups||['New Cave']; S.groupOpen=d.groupOpen||{'-1':true,'0':true}; S.eggCap=d.eggCap||10; S.ach=d.ach||{};
     S.st=d.st||[]; S.stT=d.stT||0; S.st00T=d.st00T||S.stT||0; S.unlocked00=d.unlocked00||false;
     S.hoof=d.hoof||0; S.trainCount=d.trainCount!==undefined?d.trainCount:1;
     S.hoofSubmitted=d.hoofSubmitted||[false,false,false,false,false];
@@ -2159,87 +2176,45 @@ function render(){
     var shown = filterList();
     if(S.head) shown = shown.filter(function(x){return x.id !== S.head});
     
-    // 🌟 顶部操作栏（马匹转移与全选）
-var batchBar = ce('div');
-batchBar.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:4px; width:100%;';
+   // 🌟 顶部操作栏
+    var batchBar = ce('div');
+    batchBar.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:12px; width:100%;';
 
-var toggleBatchBtn = ce('button');
-toggleBatchBtn.className = window._batchMode ? 'danger' : 'test';
-toggleBatchBtn.style.cssText = 'flex:1; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
-toggleBatchBtn.textContent = window._batchMode ? '✖ 退出' : '☑️ 开启马匹转移';
-toggleBatchBtn.onclick = function(){
-  window._batchMode = !window._batchMode;
-  if(!window._batchMode) S._batchSel = []; // 退出时清空选中
-  render();
-};
+    var toggleBatchBtn = ce('button');
+    toggleBatchBtn.className = window._batchMode ? 'danger' : 'test';
+    toggleBatchBtn.style.cssText = 'width:100%; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
+    // 🌟 文本修改
+    toggleBatchBtn.textContent = window._batchMode ? '✖ 取消' : '☑️ 分组选择';
+    toggleBatchBtn.onclick = function(){
+      window._batchMode = !window._batchMode;
+      if(!window._batchMode) S._batchSel = []; // 退出时清空
+      render();
+    };
 
-if (!window._batchMode) {
-  batchBar.appendChild(toggleBatchBtn);
-} else {
-  // 批量模式下的按钮组（并排）
-  var btnRow = ce('div');
-  btnRow.style.cssText = 'display:flex; gap:8px; width:100%;';
-  
-  // 判断当前列表是否已全选
-  var allSelected = shown.length > 0;
-  if (allSelected) {
-    for (var i=0; i<shown.length; i++) {
-      if (S._batchSel.indexOf(shown[i].id) < 0) {
-        allSelected = false;
-        break;
-      }
-    }
-  }
-  
-  var selectAllBtn = ce('button');
-  selectAllBtn.className = 'primary';
-  selectAllBtn.style.cssText = 'flex:1; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
-  selectAllBtn.textContent = allSelected ? '☒ 取消全选' : '☑️ 一键全选';
-  
-  // 🌟 核心优化：纯 DOM 操作，绝不触发 render 重绘
-  selectAllBtn.onclick = function(){
-    var isCancel = (selectAllBtn.textContent === '☒ 取消全选');
-    
-    if (isCancel) {
-      S._batchSel = []; 
+    if (!window._batchMode) {
+      batchBar.appendChild(toggleBatchBtn);
     } else {
-      S._batchSel = shown.map(function(c){ return c.id; });
-    }
-    
-    // 直接操作已有的 DOM 节点
-    var allChks = list.querySelectorAll('input[type="checkbox"]');
-    for(var i=0; i<allChks.length; i++){
-      allChks[i].checked = !isCancel;
-    }
-    
-    // 切换按钮文字
-    selectAllBtn.textContent = isCancel ? '☑️ 一键全选' : '☒ 取消全选';
-  };
-  
-  btnRow.appendChild(selectAllBtn);
-  btnRow.appendChild(toggleBatchBtn);
-  batchBar.appendChild(btnRow);
+      batchBar.appendChild(toggleBatchBtn);
 
-  // 转移下拉框
-  var batchSel = ce('select');
-  batchSel.className = 'breed-search';
-  batchSel.style.cssText = 'width:100%; min-height:36px; margin:0; font-size:14px; border:2px solid var(--primary-bd);';
-  batchSel.innerHTML = '<option value="">-- 选择目标分组进行转移 --</option>';
-  for(var gi=0; gi<S.groups.length; gi++){
-    batchSel.innerHTML += '<option value="'+gi+'">'+S.groups[gi]+'</option>';
-  }
-  batchSel.onchange = function(){
-    var targetG = parseInt(this.value);
-    if(isNaN(targetG)) return;
-    if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
-    S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
-    S._batchSel = [];
-    sv(); render(); // 这里必须 render，因为马匹的组别真的变了
-  };
-  batchBar.appendChild(batchSel);
-}
+      var batchSel = ce('select');
+      batchSel.className = 'breed-search';
+      batchSel.style.cssText = 'width:100%; min-height:36px; margin:0; font-size:14px; border:2px solid var(--primary-bd);';
+      batchSel.innerHTML = '<option value="">-- 选择目标分组进行转移 --</option>';
+      for(var gi=0; gi<S.groups.length; gi++){
+        batchSel.innerHTML += '<option value="'+gi+'">'+S.groups[gi]+'</option>';
+      }
+      batchSel.onchange = function(){
+        var targetG = parseInt(this.value);
+        if(isNaN(targetG)) return;
+        if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
+        S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
+        S._batchSel = [];
+        sv(); render();
+      };
+      batchBar.appendChild(batchSel);
+    }
 
-list.appendChild(batchBar);
+    list.appendChild(batchBar);
 
     // 开始分组渲染
     var renderGroup = function(groupId, groupName) {
@@ -2253,12 +2228,7 @@ list.appendChild(batchBar);
         var det = ce('details');
       det.className = 'dex-group';
       
-      // 🌟 默认展开：如果是未分类强制展开，其他组如果没记录过也默认展开
-      if(groupId === -1){
-        det.open = true;
-      } else {
-        det.open = S.groupOpen[groupId] !== false;
-      }
+       det.open = S.groupOpen[groupId] !== false;
       
      var summ = ce('summary');
 summ.className = 'dex-group-title';
@@ -2282,7 +2252,7 @@ if(groupId >= 0){
     var newName = prompt('修改分组名称（最多50字符，1个汉字算2字符）：', groupName);
     if(newName === null) return;
     newName = newName.trim();
-    if(!newName) newName = 'New Cave';
+     if(!newName) newName = 'New Cave ' + groupId;
     var byteLength = 0;
     for (var i = 0; i < newName.length; i++) {
       if (newName.charCodeAt(i) <= 127) byteLength += 1;
@@ -2294,20 +2264,68 @@ if(groupId >= 0){
   };
   summ.appendChild(editBtn);
 }
-      
-     // 🌟 未分类组禁止折叠
-      if (groupId === -1) {
-        summ.onclick = function(e){
-          e.preventDefault(); // 阻止浏览器默认的折叠行为
-        };
-      } else {
-        summ.onclick = function(e){
-          setTimeout(function() {
-            S.groupOpen[groupId] = det.open;
-            sv();
-          }, 10);
-        };
+  // 🌟 新增：组内一键全选按钮（仅批量模式下显示）
+      if (window._batchMode && groupHorses.length > 0) {
+        // 判断当前组是否已经全选
+        var allGroupSelected = true;
+        for (var i = 0; i < groupHorses.length; i++) {
+          if (S._batchSel.indexOf(groupHorses[i].id) < 0) {
+            allGroupSelected = false;
+            break;
+          }
+        }
+
+        var groupSelectBtn = ce('button');
+        groupSelectBtn.className = allGroupSelected ? 'primary' : 'test';
+        // 如果没改名按钮，它用 margin-left:auto 顶到右边；如果有改名按钮，它排在后边
+        groupSelectBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; border-radius:4px; ' + (groupId >= 0 ? '' : 'margin-left:auto;');
+        groupSelectBtn.textContent = allGroupSelected ? '☒ 取消本组' : '☑️ 全选本组';
+        
+        groupSelectBtn.onclick = function(e) {
+  e.preventDefault();
+  e.stopPropagation(); // 阻止折叠
+
+  if (allGroupSelected) {
+    // 从总选中里剔除本组的马
+    var groupIds = groupHorses.map(function(h){ return h.id; });
+    S._batchSel = S._batchSel.filter(function(id){ return groupIds.indexOf(id) < 0; });
+  } else {
+    // 把本组的马加入总选中
+    groupHorses.forEach(function(h) {
+      if (S._batchSel.indexOf(h.id) < 0) S._batchSel.push(h.id);
+    });
+  }
+
+  // 🌟 这里就是你要找的 DOM 获取，现在已改为获取纯 div
+  var allChks = det.querySelectorAll('.custom-chk');
+  for(var c=0; c<allChks.length; c++){
+    var el = allChks[c];
+    if (allGroupSelected) {
+      // 取消选中状态
+      el.style.background = 'transparent';
+      el.style.borderColor = 'var(--page-dim)';
+      el.innerHTML = '';
+    } else {
+      // 选中状态
+      el.style.background = 'var(--primary-bg)';
+      el.style.borderColor = 'var(--primary-bg)';
+      el.innerHTML = '<span style="color:var(--primary-fg); font-size:12px; font-weight:bold; line-height:1;">✓</span>';
+    }
+  }
+  
+  // 切换按钮状态
+  groupSelectBtn.textContent = allGroupSelected ? '☑️ 全选本组' : '☒ 取消本组';
+  groupSelectBtn.className = allGroupSelected ? 'test' : 'primary';
+};
+        
+        summ.appendChild(groupSelectBtn);
       }
+         summ.onclick = function(e){
+        setTimeout(function() {
+          S.groupOpen[groupId] = det.open;
+          sv();
+        }, 10);
+      };
       
       det.appendChild(summ);
       
@@ -2328,14 +2346,49 @@ if(groupId >= 0){
     $('cCount').textContent = shown.length + '/' + S.c.length + '/' + S.cap;
   } catch(e) { console.error('马群渲染失败', e); }
 
-  try {
+   try {
     var hatchBox = $('hatch');
     hatchBox.innerHTML = '';
     var eggs = S.c.filter(function(c){return !isH(c)});
-   $('hatchCount').textContent = eggs.length + ' / ' + (S.eggCap || 10) + ' 个';
+    $('hatchCount').textContent = eggs.length + ' / ' + (S.eggCap || 10) + ' 个';
     if(eggs.length === 0) hatchBox.innerHTML = '<div class="em">没有正在孵化的蛋</div>';
     for(var h=0; h<eggs.length; h++) {
       hatchBox.appendChild(mkEggCard(eggs[h]));
+    }
+
+    // 🌟 新增：孵化归组设置（傻瓜下拉框）
+    var hSet = $('hatchSettings');
+    if (hSet) {
+      hSet.innerHTML = '';
+      var setDiv = ce('div');
+      setDiv.style.cssText = 'display:flex; align-items:center; justify-content:space-between; background:var(--inner-bg); border:1px dashed var(--inner-bd); padding:8px 12px; border-radius:6px;';
+      setDiv.innerHTML = '<span style="font-size:12px; color:var(--page-dim);">🐣 幼崽孵化后默认前往：</span>';
+      
+      var targetSel = ce('select');
+      targetSel.className = 'breed-search';
+      targetSel.style.cssText = 'width:140px; min-height:28px; margin:0; font-size:12px;';
+      
+      var optUncat = ce('option');
+      optUncat.value = '-1';
+      optUncat.textContent = '📦 未分类';
+      if (S.defaultHatchGroup === -1) optUncat.selected = true;
+      targetSel.appendChild(optUncat);
+
+      for (var g = 0; g < S.groups.length; g++) {
+        var opt = ce('option');
+        opt.value = g;
+        opt.textContent = S.groups[g];
+        if (S.defaultHatchGroup === g) opt.selected = true;
+        targetSel.appendChild(opt);
+      }
+
+      targetSel.onchange = function() {
+        S.defaultHatchGroup = parseInt(this.value);
+        sv();
+      };
+
+      setDiv.appendChild(targetSel);
+      hSet.appendChild(setDiv);
     }
   } catch(e) { console.error('孵化渲染失败', e); }
 
@@ -2394,31 +2447,52 @@ function mkCard(c){
   }
   cd.appendChild(top);
 
- // 🌟 名字与勾选框
+  // // 🌟 名字与勾选框 (纯手工搓，绝对不跳)
 var nameRow = ce('div');
 nameRow.className = 'name-row';
-// 父容器相对定位，固定高度
 nameRow.style.cssText = 'position:relative; width:100%; height:18px; margin-top:2px;';
 
-// 勾选框
+// 只有非档案 + 批量模式开启时，才创建勾选框
 if (!inArc && window._batchMode) {
   if(!S._batchSel) S._batchSel = [];
-  var chk = ce('input');
-  chk.type = 'checkbox';
-  chk.style.cssText = 'position:absolute; left:2px; top:50%; transform:translateY(-50%) scale(1.2); cursor:pointer; margin:0; z-index:2;';
-  if(S._batchSel.indexOf(c.id) >= 0) chk.checked = true;
+  
+  var chk = ce('div');
+  chk.className = 'custom-chk';
+  // 绝对定位在左侧，固定 16x16 大小，有边框
+  chk.style.cssText = 'position:absolute; left:2px; top:50%; transform:translateY(-50%); width:16px; height:16px; border:2px solid var(--page-dim); border-radius:3px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-sizing:border-box; z-index:2;';
+  
+  // 选中状态
+  if(S._batchSel.indexOf(c.id) >= 0) {
+    chk.style.background = 'var(--primary-bg)';
+    chk.style.borderColor = 'var(--primary-bg)';
+    chk.innerHTML = '<span style="color:var(--primary-fg); font-size:12px; font-weight:bold; line-height:1;">✓</span>';
+  }
+
+  // 接管点击事件，直接改自己的样式
   chk.onclick = function(e){
-    e.stopPropagation();
-    if(chk.checked){
-      if(S._batchSel.indexOf(c.id) < 0) S._batchSel.push(c.id);
-    } else {
+    e.stopPropagation(); // 阻止触发卡片选中
+    
+    var isSelected = S._batchSel.indexOf(c.id) >= 0;
+    
+    if (isSelected) {
+      // 取消选中
       S._batchSel = S._batchSel.filter(function(id){ return id !== c.id; });
+      chk.style.background = 'transparent';
+      chk.style.borderColor = 'var(--page-dim)';
+      chk.innerHTML = '';
+    } else {
+      // 选中
+      S._batchSel.push(c.id);
+      chk.style.background = 'var(--primary-bg)';
+      chk.style.borderColor = 'var(--primary-bg)';
+      chk.innerHTML = '<span style="color:var(--primary-fg); font-size:12px; font-weight:bold; line-height:1;">✓</span>';
     }
   };
+  
   nameRow.appendChild(chk);
 }
 
-// 文字：绝对居中，超长变省略号，左右留空防遮挡
+// 文字：绝对居中，超长变省略号
 var nmText = ce('span');
 nmText.textContent = c.name || 'unknown';
 nmText.style.cssText = 'position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); max-width:calc(100% - 32px); text-align:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;';
@@ -2571,11 +2645,8 @@ function mkStoreUI(){
   // === 1. 渲染马匹（居中对齐，卡片放大版） ===
   var se=$('storeGrid');se.innerHTML='';
   checkDailyReset(); // 检查重置
-  
- var headerBar = ce('div');
-// 🌟 删除了假时钟，改为按钮直接靠右对齐
-headerBar.style.cssText = 'display:flex; justify-content:flex-end; align-items:center; width:100%; margin-bottom:10px;';
-
+    var headerBar = ce('div');
+  headerBar.style.cssText = 'display:flex; justify-content:flex-end; align-items:center; width:100%; margin-bottom:10px;';
 var btn = ce('button');
 btn.className = 'test';
 btn.style.cssText = 'padding:4px 10px; font-size:12px; min-height:28px; border-radius:4px;';
@@ -2584,6 +2655,7 @@ if (S.refreshData.s01 <= 0) btn.disabled = true;
 btn.onclick = function() { manualRefresh('01'); };
 headerBar.appendChild(btn);
 se.appendChild(headerBar);
+  // 🌟 回归 flex 布局，保证无论几个都是居中排列
   se.style.cssText = 'display:flex; flex-wrap:wrap; gap:12px; width:100%; justify-content:center; margin-bottom:15px;';
   
   for(var i=0;i<S.st.length;i++){
@@ -2591,9 +2663,8 @@ se.appendChild(headerBar);
       var it=S.st[idx];
       var cd=ce('div');
       cd.className='sc'+(it.sold?' sold':'')+(it.hasWing && !it.sold ? ' sc-wing-highlight' : '');
-      // 弹性自适应宽度，屏幕越宽卡片越大，最大不超过 160px
-      cd.style.cssText = 'padding:10px; gap:6px; display:flex; flex-direction:column; align-items:center; justify-content:space-between; flex: 1 1 110px; max-width: 160px; box-sizing:border-box;';
-      
+      // 锁死卡片宽度为 110px，不拉伸，保证整齐划一
+      cd.style.cssText = 'width:110px; flex:0 0 110px; padding:10px; gap:6px; display:flex; flex-direction:column; align-items:center; justify-content:space-between; box-sizing:border-box;';
       cd.appendChild(mkPB(it));
       
       var si=SX[it.sx]||SX.m;
@@ -2657,10 +2728,11 @@ if(cb){
       (canBuyGroup 
         ? '<button class="buy"'+(canAffordGroup?'':' disabled')+'>🥕 500 扩建</button>'
         : '<div class="pct" style="color:var(--page-dim)">已达上限</div>');
-    if(canBuyGroup && canAffordGroup){
+   if(canBuyGroup && canAffordGroup){
       gc.querySelector('button').onclick=function(){
         S.r -= 500;
-        S.groups.push('New Cave');
+        // 🌟 动态加上数字后缀，比如当前有一个组，新组就叫 New Cave 1
+        S.groups.push('New Cave ' + S.groups.length); 
         sv(); render();
       };
     }
@@ -2957,13 +3029,14 @@ if(hasEggs){
   for(var i=0;i<S.c.length;i++){
     var c=S.c[i];
     if(isH(c)) continue;
+    // 🌟 只有在页面确实存在蛋的时候才去查 DOM，稍微省点算力
     var el=document.querySelector('.st[data-cid="'+c.id+'"]');
-    if(!el)continue;
-    var st=stTx(c);
-    if(el.textContent!==st.text){
-      el.textContent=st.text;
-      el.className='st '+st.cls;
-      if(st.cls==='hatch')full=true;
+    if(el){
+      var st=stTx(c);
+      if(el.textContent!==st.text){
+        el.textContent=st.text;
+        el.className='st '+st.cls;
+      }
     }
   }
 }
@@ -3004,7 +3077,6 @@ if(hasEggs){
       }
       S.head=null;S.headStart=0;S.headRace=0;sv();full=true;
     }
-    mkHeadUI();
   }
   
   // 4. 01商店刷新与倒计时 (防弹纯时间版)
@@ -3047,7 +3119,7 @@ function doBreed(isTest){if(S.sel.length!==2)return;var a=findC(S.sel[0]),b=find
   if(!isTest&&S.c.filter(function(c){return!isH(c)}).length>=(S.eggCap||10)){alert('幼崽栏已满 ('+(S.eggCap||10)+'/'+(S.eggCap||10)+')，请等待孵化');return}
   if(!isTest&&S.c.length>=S.cap){alert('马群已满');return}
   var cost=Math.floor(Math.random()*2)+2;if(!isTest&&S.r<cost){alert('胡萝卜不够 (需要2-3根)');return}
-  var r=breed(a,b);var c=r.c,mus=r.mus;c.group = -1;
+  var r=breed(a,b);var c=r.c,mus=r.mus;
   if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
     {var c2,mus2;if(Math.random()<0.5){c2=JSON.parse(JSON.stringify(c));c2.id=uid();mus2=mus.slice()}else{
       var r2=breed(a,b);c2=r2.c;c2.hat=0;mus2=r2.mus}S.c.push(c2);mkDex(c2);checkAch(c2,mus2,a,b);unlock('twin')}S.sel=[];sv();render()}
@@ -3528,14 +3600,33 @@ function cleanExhaustedHorses(){
   
   setTimeout(function(){
     var toDelete = S.c.filter(function(c){ return isH(c) && c.bc >= getMaxBc(c) && !c.var && c.id !== S.head && c.id !== S.stud && !c.isLocked; });
-    if(toDelete.length === 0) return alert('当前没有可清理的耗尽马匹。');
+    
+    // 🌟 辅助函数：重置所有筛选条件并刷新
+    var resetFilters = function(){
+      if($('sSex')) $('sSex').value = '';
+      if($('sName')) $('sName').value = '';
+      if($('sColor')) $('sColor').value = '';
+      if($('sMut')) $('sMut').value = '';
+      render();
+    };
+
+    if(toDelete.length === 0) {
+      alert('当前没有可清理的耗尽马匹。');
+      resetFilters(); // 没马可清，取消筛选
+      return;
+    }
+    
     if(confirm('⚠️ 警告：即将永久清理 ' + toDelete.length + ' 匹繁育次数耗尽的马。此操作不可逆，且不会获得任何回报。是否确认？')){
       var ids = toDelete.map(function(c){return c.id;});
       S.c = S.c.filter(function(c){ return ids.indexOf(c.id) < 0; });
       S.sel = S.sel.filter(function(id){ return ids.indexOf(id) < 0; });
       S._batchSel = S._batchSel.filter(function(id){ return ids.indexOf(id) < 0; });
-      sv(); render();
+      sv();
+      resetFilters(); // 清理完毕，取消筛选
       alert('清理完毕！');
+    } else {
+      // 🌟 玩家点了取消，也取消筛选
+      resetFilters();
     }
   }, 100);
 }
