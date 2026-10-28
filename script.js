@@ -1,16 +1,50 @@
 window.onerror=function(m,s,l){var e=$('err');if(e){e.style.display='block';e.textContent='⚠ '+m+'（行 '+l+'）'}};
 function $(i){return document.getElementById(i)}function ce(t){return document.createElement(t)}
 var KEY='hnb1',ok=false,ms=null;try{localStorage.setItem('_','1');localStorage.removeItem('_');ok=true}catch(e){}
-function sv(){
-  var d={
-    farmName:S.farmName, farmId:S.farmId, c:S.c, a:S.a, d:S.d, r:S.r, p:S.p, st:S.st, 
-    stT:S.stT, st00T:S.st00T, stud:S.stud, studL:S.studL, studT:S.studT, 
-    studN:S.studN, ach:S.ach, cap:S.cap, defaultHatchGroup:S.defaultHatchGroup, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap, eggCap:S.eggCap,head:S.head, headStart:S.headStart, 
-    headRace:S.headRace, headLastTick:S.headLastTick, headTerm:S.headTerm, 
-    points:S.points, hoof:S.hoof, trainCount:S.trainCount, hoofSubmitted:S.hoofSubmitted, 
-    trainFail:S.trainFail, trainSuccess:S.trainSuccess, unlocked00:S.unlocked00, 
-    headRaceCount:S.headRaceCount, displayMode:S.displayMode, themeMode:S.themeMode,headRaceCount:S.headRaceCount, displayMode:S.displayMode, themeMode:S.themeMode, lastRescue:S.lastRescue, refreshData:S.refreshData
+// 🌟 全局唯一打包器：所有保存逻辑全走这里，再也不怕漏字段！
+function getSaveData() {
+  return {
+    farmName: S.farmName, 
+    farmId: S.farmId, 
+    c: S.c, 
+    a: S.a, 
+    d: S.d, 
+    r: S.r, 
+    p: S.p, 
+    st: S.st, 
+    stT: S.stT, 
+    st00T: S.st00T, 
+    stud: S.stud, 
+    studL: S.studL, 
+    studT: S.studT, 
+    studN: S.studN, 
+    ach: S.ach, 
+    cap: S.cap, 
+    defaultHatchGroup: S.defaultHatchGroup, 
+    groups: S.groups, 
+    groupOpen: S.groupOpen, 
+    eggCap: S.eggCap, 
+    head: S.head, 
+    headStart: S.headStart, 
+    headRace: S.headRace, 
+    headLastTick: S.headLastTick, 
+    headTerm: S.headTerm, 
+    points: S.points, 
+    hoof: S.hoof, 
+    trainCount: S.trainCount, 
+    hoofSubmitted: S.hoofSubmitted, 
+    trainFail: S.trainFail, 
+    trainSuccess: S.trainSuccess, 
+    unlocked00: S.unlocked00, 
+    headRaceCount: S.headRaceCount, 
+    displayMode: S.displayMode, 
+    themeMode: S.themeMode, 
+    lastRescue: S.lastRescue, 
+    refreshData: S.refreshData
   };
+}
+function sv(){
+  var d = getSaveData();
   if(ok){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){ok=false;ms=d}}else ms=d;
 }
 function ld(){var r=null;if(ok){try{r=localStorage.getItem(KEY)}catch(e){}}else if(ms)return al(ms);if(!r)return false;try{return al(JSON.parse(r))}catch(e){return false}}
@@ -1965,10 +1999,7 @@ function dlExp(){
     if(customName.trim() === '') customName = defaultName;
     customName = customName.replace(/[\/\\:*?"<>|]/g, '_'); 
 
-    var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,
-      cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
-      headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,farmId:S.farmId,displayMode:S.displayMode};
-    
+    var d = getSaveData();
     var jsonString = JSON.stringify(d);
     var encoded = btoa(unescape(encodeURIComponent(jsonString)));
     var txt = "// 【马儿不跑】存档文件\n// 请勿随意更改以下内容，可能导致丢档和无法导入\n\n" + encoded;
@@ -3651,13 +3682,7 @@ function getTimestamp() {
 function quickSave() {
   if(!confirm('⚡ 确定要极速保存吗？将下载一个存档文件到本地。')) return;
   
-  var d = {
-    farmName: S.farmName, farmId: S.farmId, c: S.c, a: S.a, d: S.d, r: S.r, p: S.p, st: S.st, stT: S.stT, st00T: S.st00T,
-    stud: S.stud, studL: S.studL, studT: S.studT, studN: S.studN, ach: S.ach, cap: S.cap, 
-    head: S.head, headStart: S.headStart, headRace: S.headRace, headLastTick: S.headLastTick, displayMode: S.displayMode, headTerm: S.headTerm, 
-    points: S.points, hoof: S.hoof, trainCount: S.trainCount, hoofSubmitted: S.hoofSubmitted, 
-    trainFail: S.trainFail, trainSuccess: S.trainSuccess, unlocked00: S.unlocked00, headRaceCount: S.headRaceCount
-  };
+ var d = getSaveData();
   
   var jsonString = JSON.stringify(d);
   
