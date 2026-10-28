@@ -1722,4 +1722,19 @@ body > details {
   .right-grid { gap: 2px !important; }
   .color-box { width: 10px !important; height: 10px !important; border-width: 1px !important; }
   .part-box { height: 4px !important; border-width: 1px !important; }
+
+   /* 🌟 修复文字模式被挤成方块的问题 */
+  .card-bottom.text-bottom {
+    display: flex !important;
+    grid-template-columns: none !important;
+    gap: 3px !important;
+    padding: 4px 0 0 0 !important;
+  }
+  
+  /* 手机端文字标签稍微缩小一点，防止溢出 */
+  .text-bottom .tag {
+    font-size: 9px !important;
+    padding: 0 2px !important;
+    line-height: 1.4 !important;
+  }
 }

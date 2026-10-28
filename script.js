@@ -53,8 +53,8 @@ function al(d){
   S.trainSuccess = d.trainSuccess || 0;
   S.unlocked00 = d.unlocked00 || false;
   S.st = d.st || [];
-  S.stT = d.stT || 0;
-  S.st00T = d.st00T || S.stT || 0;
+ S.stT = d.stT || Date.now(); // 如果旧档没这个字段，就直接设为当前时间
+ S.st00T = d.st00T || S.stT;  // 同理兜底
   
   S.stud = d.stud || null;
   S.studL = d.studL || 0;
@@ -1607,6 +1607,7 @@ function manualRefresh(type) {
       S.r -= 100;
       S.refreshData.s01--;
       mkStore(true);
+      S.stT = Date.now(); // 🌟 花钱了，01商店时间重置为现在
       sv(); render();
       showToast('🛒 月光商店已刷新！');
     }
@@ -1617,7 +1618,8 @@ function manualRefresh(type) {
       S.hoof -= 50;
       S.refreshData.s00--;
       S.trainCount = 1;
-      S.hoofSubmitted = [false, false, false, false, false];
+      S.hoofSubmitted = [false,false,false,false,false];
+      S.st00T = Date.now(); // 🌟 花钱了，00商店时间重置为现在
       sv(); render();
       showToast('🌑 缄默商店已刷新！');
     }
@@ -1625,44 +1627,36 @@ function manualRefresh(type) {
 }
 function mkStore(force){
   var now=Date.now();
-  // 只要时间没到，哪怕你买空了商店，也绝对不刷新！
   if(!force && S.stT && now-S.stT<SRM) return; 
   
   S.st=[];
-  var hasWingInStore = false; // 👈 新加的：用来记录这批马有没有翅膀
+  var hasWingInStore = false; 
 
   for(var i=0;i<SSZ;i++){
     var c=newC(0,{inst:true,store:true});
     if(c.sx==='h')c.sx=pk(['m','f']);
     c.mut=null;c.pie=false;c.firefly=false;c.sterile=false;c.doubleWomb=false;
     
-  if(Math.random() >= 0.15) { c.g.win = 'none'; } // 85%概率无翅，15%概率有翅
-    // 翅膀价格暴增判定
+    if(Math.random() >= 0.15) { c.g.win = 'none'; } // 15%概率有翅
+
     var wingOpt = fo('win', c.g.win);
     var wingBonus = 0;
     if (wingOpt.k !== 'none') {
-      if (wingOpt.t === 'c') wingBonus = 100;       // 小翼
-      else if (wingOpt.t === 'r') wingBonus = 200;  // 稀有翼
-      else if (wingOpt.t === 'e') wingBonus = 500;  // 龙翼
+      if (wingOpt.t === 'c') wingBonus = 100;       
+      else if (wingOpt.t === 'r') wingBonus = 200;  
+      else if (wingOpt.t === 'e') wingBonus = 500;  
     }
 
-    // 基础价 + 魅力加成 + 翅膀溢价
     c.price = 15 + Math.floor(rSFull(c) * 1.5) + wingBonus;
     c.hasWing = wingOpt.k !== 'none'; 
     
-    if (c.hasWing) {
-      hasWingInStore = true; // 👈 只要有一只带翅膀，就记录下来
-    }
-    
+    if (c.hasWing) { hasWingInStore = true; }
     S.st.push(c);
   }
   
-  // 👈 循环结束后，统一判断要不要弹提示
   if (hasWingInStore) {
     setTimeout(function(){ showToast('✨ 商店似乎进了一批带翅膀的好货！', true); }, 500);
   }
-  
-  S.stT=now;
 }
 function buyStore(i){var it=S.st[i];if(!it||it.sold)return;if(S.r<SPR){alert('胡萝卜不够');return}if(S.c.length>=S.cap){alert('马群已满');return}S.r-=SPR;it.sold=true;
 it.group = -1;it.store=false;S.c.push(it);mkDex(it);sv();render()}
@@ -2048,12 +2042,17 @@ for(var j=0;j<S.a.length;j++){
     // 先执行图鉴颜色迁移
     migrateDexColors();
 
-    // 强制刷新一次商店（解决商店旧马颜色丢失，并洗掉旧档的带翅膀马）
-    mkStore(true);
-    sv();
-    closeM();
-    render();
-    alert('✅ 存档导入成功！');
+   // 🌟 1. 继承旧存档的时间，防止SL刷商店
+if(!S.stT) S.stT = Date.now();
+if(!S.st00T) S.st00T = Date.now();
+
+// 🌟 2. 洗掉旧商店的脏数据（只重新生成马，不修改时间）
+mkStore(true); 
+
+sv();
+closeM();
+render();
+alert('✅ 存档导入成功！');
   }catch(e){
     alert('❌ 导入失败：'+e.message);
   }
@@ -2527,7 +2526,9 @@ cd.appendChild(nameRow);
     var bottom=ce('div');bottom.className='card-bottom';
     
     if(S.displayMode === 'text'){
-      bottom.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; justify-content:center; padding:0 2px;';
+          // 🌟 加上 text-bottom 专属类名，并强制 display:flex 覆盖网格
+        bottom.className = 'card-bottom text-bottom';
+        bottom.style.cssText = 'display:flex !important; flex-wrap:wrap; gap:4px; margin-top:6px; justify-content:center; padding:0 2px;';
       var addTag = function(txt, type) {
         var span = ce('span');
         span.textContent = txt;
@@ -3045,18 +3046,24 @@ if(hasEggs){
   if(hn<S._hc)full=true;
   S._hc=hn;
   
-  // 2. 种马产出
+ // 2. 种马产出
   if(S.stud&&S.studL>0){
     var sc=findC(S.stud);
-    if(sc&&now-S.studT>=S.studN){
-      var bonus=sc.mut?5:0;
-      var gain=(rS(sc)+bonus)*2;
-      S.r+=gain;
-      S.studL--;
-      S.studT=now;
-      S.studN=SMN+Math.random()*(SMX-SMN);
-      if(S.studL<=0){unlock('bye');S.stud=null}
-      sv();full=true;
+    if(sc){
+      // 🌟 用 while 循环：只要时间够了，就一直生，直到次数用完或时间不够
+      while (now - S.studT >= S.studN && S.studL > 0) {
+        var bonus=sc.mut?5:0;
+        var gain=(rS(sc)+bonus)*2;
+        S.r += gain;
+        S.studL--;
+        S.studT += S.studN; // 👈 关键：把下一次产出时间往后推，而不是设为当前时间
+        S.studN = SMN + Math.random()*(SMX-SMN);
+      }
+      if(S.studL <= 0){
+        unlock('bye');
+        S.stud = null;
+      }
+      sv(); full = true;
     }
   }
   
@@ -3079,9 +3086,10 @@ if(hasEggs){
     }
   }
   
-  // 4. 01商店刷新与倒计时 (防弹纯时间版)
+// 4. 01商店刷新与倒计时 (防弹纯时间版)
   if(S.stT && now - S.stT >= SRM){
-    S.stT = now; 
+    var missed = Math.floor((now - S.stT) / SRM);
+    S.stT = S.stT + (missed * SRM); 
     mkStore(true);
     sv();
     full = true;
@@ -3090,7 +3098,8 @@ if(hasEggs){
   
   // 5. 00商店刷新与倒计时
   if(S.st00T && now - S.st00T >= SRM){
-    S.st00T = now; 
+    var missed00 = Math.floor((now - S.st00T) / SRM);
+    S.st00T = S.st00T + (missed00 * SRM);
     S.trainCount = 1;
     S.hoofSubmitted = [false,false,false,false,false];
     sv();
@@ -3159,7 +3168,10 @@ function init(){
   if(!l){
     S.c=[newC(0,{inst:true}),newC(0,{inst:true}),newC(0,{inst:true})];
     for(var i=0;i<S.c.length;i++)mkDex(S.c[i]);
-    mkStore(true);sv();
+    mkStore(true);
+    S.stT = Date.now(); // 🌟 新档初始化时间
+    S.st00T = Date.now(); // 🌟 新档初始化时间
+    sv();
   }else{
     mkStore(false);
   }
@@ -3691,3 +3703,10 @@ function confirmSetHead(id){if(confirm('确定要将这匹马设为首马吗？'
 
 loadAllParts()
 init();setInterval(tick,1000);
+// 🌟 当页面从后台切回前台时，立刻唤醒一次 tick，并刷新界面
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') {
+    tick(); // 强制跑一次逻辑，计算离线期间的商店刷新、种马产出、蛋孵化等
+    render(); // 强制重绘一次界面，确保 UI 跟上数据
+  }
+});
