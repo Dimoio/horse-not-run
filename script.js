@@ -1806,19 +1806,64 @@ function moveHorseGroup(id, targetG) {
   c.group = parseInt(targetG);
   sv(); closeM(); render();
 }
+
+// 🌟 自定义输入框弹窗（完美适配手机键盘防遮挡 + PC端焦点稳定）
+function customPrompt(title, defaultValue, callback) {
+  var h = '<div class="mdt">'+title+'</div>';
+  h += '<input id="customPromptInput" class="breed-search" style="width:100%; min-height:40px; margin-bottom:15px; font-size:15px; box-sizing:border-box; padding:8px;" value="'+(defaultValue||'')+'">';
+  h += '<div style="display:flex; gap:10px;">';
+  h += '<button class="mc" style="flex:1;" onclick="closeM()">取消</button>';
+  h += '<button class="primary" id="customPromptBtn" style="flex:1;">确定</button>';
+  h += '</div>';
+  
+  showM(h);
+  
+  var input = document.getElementById('customPromptInput');
+  var btn = document.getElementById('customPromptBtn');
+  var modalC = document.getElementById('modalC');
+  
+  setTimeout(function() { 
+    input.focus(); 
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+  }, 150);
+  
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function onResize() {
+      if (document.getElementById('customPromptInput')) {
+        modalC.style.marginBottom = (window.innerHeight - window.visualViewport.height) + 'px';
+      } else {
+        window.visualViewport.removeEventListener('resize', onResize);
+      }
+    });
+  }
+  
+  btn.onclick = function() {
+    closeM();
+    modalC.style.marginBottom = '0';
+    callback(input.value);
+  };
+  
+  input.onkeydown = function(e) {
+    if (e.key === 'Enter') {
+      closeM();
+      modalC.style.marginBottom = '0';
+      callback(input.value);
+    }
+  };
+}
+
 // ==== 马匹命名 ====
 function rename(id){
   var c=findC(id);
   if(!c)return;
-  var n=prompt('给这匹马起个名字（最多25个字符）：',c.name||'');
-  if(n===null)return; 
-  
-  n = n.trim();
-  if(n.length > 25) return alert('名字太长了！最多只能输入 25 个字符。');
-  
-  c.name=n;
-  if(c.name)unlock('named');
-  sv();closeM();render();
+  customPrompt('给这匹马起个名字（最多25个字符）：', c.name||'', function(n){
+    if(n === null) return;
+    n = n.trim();
+    if(n.length > 25) return alert('名字太长了！最多只能输入 25 个字符。');
+    c.name = n;
+    if(c.name) unlock('named');
+    sv(); render();
+  });
 }
 function useP(id,t){var c=findC(id);if(!c)return;if(t==='m'){if(S.p.m<=0||c.mut||c.pie)return;S.p.m--;c.mut=pk(MT)}else if(t==='v'){
   if(S.p.v<=0||c.var||S.a.indexOf(c)<0)return;
@@ -1894,37 +1939,34 @@ function openSave(){showM('<div class="mdt">💾 存档管理</div><div style="f
 // ==== dlExp 存档导出====
 function dlExp(){
   var defaultName = '【Save-马儿不跑】_' + getTimestamp();
-  var customName = prompt("请给你的存档起个名字吧（留空则使用默认名字）：", defaultName);
-  if(customName === null) return;
-  if(customName.trim() === '') customName = defaultName;
-  customName = customName.replace(/[\/\\:*?"<>|]/g, '_'); // 过滤非法字符
+  customPrompt("请给你的存档起个名字吧（留空则使用默认名字）：", defaultName, function(customName){
+    if(customName === null) return;
+    if(customName.trim() === '') customName = defaultName;
+    customName = customName.replace(/[\/\\:*?"<>|]/g, '_'); 
 
-  var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,
-      cap:S.cap, defaultHatchGroup:S.defaultHatchGroup, defaultHatchGroup:S.defaultHatchGroup,groups:S.groups, groupOpen:S.groupOpen, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
-    headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,displayMode:S.displayMode};
-  
-  var jsonString = JSON.stringify(d);
-  
-  // 🌟 Base64 轻度加密（兼容中文字符）
-  var encoded = btoa(unescape(encodeURIComponent(jsonString)));
-  
-  // 加上题头提示
-  var txt = "// 【马儿不跑】存档文件\n// 请勿随意更改以下内容，可能导致丢档和无法导入\n\n" + encoded;
-  
-  try{
-    var blob=new Blob([txt],{type:'application/json'});
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');
-    a.href=url;
-    a.download=customName + '.json'; 
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){URL.revokeObjectURL(url)},2000);
-    alert('✅ 存档文件已下载！');
-  }catch(e){
-    alert('下载失败，请尝试使用其他浏览器');
-  }
+    var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,
+      cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
+      headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,displayMode:S.displayMode};
+    
+    var jsonString = JSON.stringify(d);
+    var encoded = btoa(unescape(encodeURIComponent(jsonString)));
+    var txt = "// 【马儿不跑】存档文件\n// 请勿随意更改以下内容，可能导致丢档和无法导入\n\n" + encoded;
+    
+    try{
+      var blob=new Blob([txt],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;
+      a.download=customName + '.json'; 
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url)},2000);
+      alert('✅ 存档文件已下载！');
+    }catch(e){
+      alert('下载失败，请尝试使用其他浏览器');
+    }
+  });
 }
 function cpExp(){var ta=$('expA');ta.select();ta.setSelectionRange(0,999999);try{document.execCommand('copy');alert('已复制');}catch(e){alert('请长按手动复制')}}
 function impSave(){var f=ce('input');f.type='file';f.accept='.json,application/json';f.onchange=function(e){var file=e.target.files[0];if(!file)return;var r=new FileReader();r.onload=function(ev){doImp(ev.target.result)};r.readAsText(file)};f.click()}
@@ -2245,22 +2287,23 @@ if(groupId >= 0){
   // 🌟 margin-left: auto 是灵魂，直接把它推到容器最右侧
   editBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; margin-left:auto; border-radius:4px;';
   editBtn.textContent = '✏️ 改名';
-  editBtn.onclick = function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    var newName = prompt('修改分组名称（最多50字符，1个汉字算2字符）：', groupName);
-    if(newName === null) return;
-    newName = newName.trim();
-     if(!newName) newName = 'New Cave ' + groupId;
-    var byteLength = 0;
-    for (var i = 0; i < newName.length; i++) {
-      if (newName.charCodeAt(i) <= 127) byteLength += 1;
-      else byteLength += 2;
-    }
-    if (byteLength > 50) return alert('名字太长了！最多50个字符。');
-    S.groups[groupId] = newName;
-    sv(); render();
-  };
+   editBtn.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          customPrompt('修改分组名称（最多50字符，1个汉字算2字符）：', groupName, function(newName){
+            if(newName === null) return;
+            newName = newName.trim();
+            if(!newName) newName = 'New Cave ' + groupId;
+            var byteLength = 0;
+            for (var i = 0; i < newName.length; i++) {
+              if (newName.charCodeAt(i) <= 127) byteLength += 1;
+              else byteLength += 2;
+            }
+            if (byteLength > 50) return alert('名字太长了！最多50个字符。');
+            S.groups[groupId] = newName;
+            sv(); render();
+          });
+        };
   summ.appendChild(editBtn);
 }
   // 🌟 新增：组内一键全选按钮（仅批量模式下显示）
@@ -3325,12 +3368,12 @@ function mkBreedUI(){
   var fc = $('breedFilterCol');
   if(fc && fc.options.length<=1) {
     for(var i=0;i<CK.length;i++){ var opt=ce('option'); opt.value=CK[i]; opt.textContent=CL[CK[i]][0]; fc.appendChild(opt);}
-    fc.onchange = function(){ mkBreedUI(); };
+     fc.onchange = function(){ setTimeout(mkBreedUI, 50); };
   }
   var fr = $('breedFilterRarity');
   if(fr && fr.options.length<=1) {
     fr.innerHTML += '<option value="c">常见部件</option><option value="r">稀有部件</option><option value="e">罕见部件</option>';
-    fr.onchange = function(){ mkBreedUI(); };
+      fr.onchange = function(){ setTimeout(mkBreedUI, 50); };
   }
 
   var mArr=breedPool('M');
@@ -3592,18 +3635,19 @@ function raceHead(){
 }
 
 function editFarmName(){
-  var name = prompt("请输入你的马场名字（最多50字符，1个汉字算2字符）：", S.farmName || '我的马场');
-  if(name === null) return; 
-  name = name.trim();
-  if(!name) return alert('名字不能为空！');
-  var byteLength = 0;
-  for (var i = 0; i < name.length; i++) {
-    if (name.charCodeAt(i) <= 127) byteLength += 1;
-    else byteLength += 2;
-  }
-  if (byteLength > 50) return alert('名字太长了！最多50个字符。');
-  S.farmName = name;
-  sv(); render();
+  customPrompt("请输入你的马场名字（最多50字符，1个汉字算2字符）：", S.farmName || '我的马场', function(name){
+    if(name === null) return;
+    name = name.trim();
+    if(!name) return alert('名字不能为空！');
+    var byteLength = 0;
+    for (var i = 0; i < name.length; i++) {
+      if (name.charCodeAt(i) <= 127) byteLength += 1;
+      else byteLength += 2;
+    }
+    if (byteLength > 50) return alert('名字太长了！最多50个字符。');
+    S.farmName = name;
+    sv(); render();
+  });
 }
 function cleanExhaustedHorses(){
   var sSex = document.getElementById('sSex');
@@ -3710,3 +3754,22 @@ document.addEventListener('visibilitychange', function() {
     render(); // 强制重绘一次界面，确保 UI 跟上数据
   }
 });
+
+// 🌟 下拉框防跳动延迟补丁（零性能负担，全端兼容）
+// ==========================================
+setTimeout(function() {
+  // 筛选栏的下拉框
+  var selects = ['sSex', 'sColor', 'sMut', 'arcSex', 'arcColor', 'arcMut'];
+  selects.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && !el.dataset.safeDelay) {
+      el.dataset.safeDelay = "1";
+      var oldChange = el.onchange;
+      el.onchange = function(e) {
+        if (oldChange) {
+          setTimeout(function() { oldChange.call(el, e); }, 50);
+        }
+      };
+    }
+  });
+}, 1000); // 延迟1秒等DOM加载完毕再挂载
