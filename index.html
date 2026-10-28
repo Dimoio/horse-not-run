@@ -26,10 +26,11 @@
 
 <div id="err"></div>
 
-<h1><img src="images/horse.png" class="logo-icon" alt="">马儿不跑</h1>
+<h1><img src="images/horse.png" class="logo-icon" alt="" width="28" height="28">马儿不跑</h1>
 
 <div class="meta">v1.21 Beta 内测 by 01 非常感谢你的游玩！上次更新：2026.10.27 如有兴趣参加Beta测试，可加入我们的QQ群：419101070</div>
 <div id="farmNameBox" style="text-align: center; font-size: 14px; color: var(--farm-name-fg); margin-top: 5px; margin-bottom: 5px; cursor: pointer; max-width: 80%; margin-left: auto; margin-right: auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" onclick="editFarmName()" title="点击修改马场名字">🏡 我的马场</div>
+<div id="farmIdBox" style="text-align: center; font-size: 11px; color: var(--page-muted); margin-top: 2px; margin-bottom: 5px; letter-spacing: 1px;"></div>
 <div class="tb">
   <span id="stat"></span>
   <span id="globalClock" style="font-size:12px; color:var(--clock-fg); font-weight:bold; margin-right:8px;"></span>
@@ -138,7 +139,7 @@
   <summary>🛒 月光商店 (01) <span id="storeTimer" class="sb"></span></summary>
   <div class="store-layout">
     <div class="shopkeeper" id="shop01">
-     <img src="images/01.png" alt="01" class="k01-img">
+     <img src="images/01.png" alt="01" class="k01-img" width="180" height="180" style="aspect-ratio: 1/1; object-fit: contain;">
       <div class="k01-dialogue" id="k01Text">...</div>
     </div>
     <div class="store-main">
@@ -153,7 +154,7 @@
   <summary>🌑 缄默商店 (00) <span id="store00Timer" class="sb"></span> <span id="store00Sub" class="sb"></span></summary>
   <div class="store-layout">
     <div class="shopkeeper" id="shop00">
-      <img src="images/00.png" alt="00" class="k01-img" style="transform: scaleX(-1);">
+     <img src="images/00.png" alt="00" class="k01-img" width="180" height="180" style="aspect-ratio: 1/1; object-fit: contain; transform: scaleX(-1);">
       <div class="k01-dialogue" id="k00Text" style="border-color:var(--dialogue-bd);color:var(--dialogue-fg);">...</div>
     </div>
     <div class="store-main">
@@ -167,17 +168,17 @@
 <details open>
   <summary>📦 档案 <span id="arcCount" class="sb"></span></summary>
  <div class="filter" style="margin-bottom:10px;">
-  <input id="arcName" placeholder="搜索名字 / 代数" oninput="mkArc()">
-  <select id="arcSex" onchange="mkArc()">
+<input id="arcName" placeholder="搜索名字 / 代数" oninput="clearTimeout(window._arcTimer); window._arcTimer = setTimeout(mkArc, 300)">
+<select id="arcSex" onchange="setTimeout(mkArc, 60)">
     <option value="">全部性别</option>
     <option value="m">♂ 雄性</option>
     <option value="f">♀ 雌性</option>
     <option value="h">⚥ 雌雄同体</option>
   </select>
-  <select id="arcColor" onchange="mkArc()">
+  <select id="arcColor" onchange="setTimeout(mkArc, 60)">
     <option value="">全部颜色</option>
   </select>
-  <select id="arcMut" onchange="mkArc()">
+  <select id="arcMut" onchange="setTimeout(mkArc, 60)">
     <option value="">全部属性</option>
     <option value="any">带有突变</option>
     <option value="albino">白化</option>

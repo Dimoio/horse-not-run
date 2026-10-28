@@ -3,7 +3,7 @@ function $(i){return document.getElementById(i)}function ce(t){return document.c
 var KEY='hnb1',ok=false,ms=null;try{localStorage.setItem('_','1');localStorage.removeItem('_');ok=true}catch(e){}
 function sv(){
   var d={
-    farmName:S.farmName, c:S.c, a:S.a, d:S.d, r:S.r, p:S.p, st:S.st, 
+    farmName:S.farmName, farmId:S.farmId, c:S.c, a:S.a, d:S.d, r:S.r, p:S.p, st:S.st, 
     stT:S.stT, st00T:S.st00T, stud:S.stud, studL:S.studL, studT:S.studT, 
     studN:S.studN, ach:S.ach, cap:S.cap, defaultHatchGroup:S.defaultHatchGroup, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap, eggCap:S.eggCap,head:S.head, headStart:S.headStart, 
     headRace:S.headRace, headLastTick:S.headLastTick, headTerm:S.headTerm, 
@@ -14,24 +14,77 @@ function sv(){
   if(ok){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){ok=false;ms=d}}else ms=d;
 }
 function ld(){var r=null;if(ok){try{r=localStorage.getItem(KEY)}catch(e){}}else if(ms)return al(ms);if(!r)return false;try{return al(JSON.parse(r))}catch(e){return false}}
-// ==== al(d) 存档读取与兜底 ====
+// 🌟 万能洗刷函数：不管哪里来的马，全在这里补全字段，以后加字段只改这里！
+function fixHorse(c, existingHids) {
+  if (!c) return c;
+  
+  // 补全 ID 和 马场信息
+  if (!c.hid) { 
+    c.hid = genHorseHid(S.farmId, existingHids); 
+    if (existingHids) existingHids.push(c.hid);
+  }
+  if (!c.birthFarmName) c.birthFarmName = S.farmName;
+  if (!c.birthFarmId) c.birthFarmId = S.farmId;
+  if (!c.currentFarmName) c.currentFarmName = S.farmName;
+  if (!c.currentFarmId) c.currentFarmId = S.farmId;
+  
+  // 补全基础属性
+  if (c.name === undefined) c.name = '';
+  if (c.hasBeenStud === undefined) c.hasBeenStud = false;
+  if (c.trainSpeed === undefined) c.trainSpeed = 0;
+  if (c.trained === undefined) c.trained = false;
+  if (c.pie === undefined) c.pie = false;
+  if (c.pieColor === undefined) c.pieColor = 'w';
+  if (c.firefly === undefined) c.firefly = false;
+  if (c.induceHerm === undefined) c.induceHerm = false;
+  if (c.sterile === undefined) c.sterile = false;
+  if (c.doubleWomb === undefined) c.doubleWomb = false;
+  if (c.isLocked === undefined) c.isLocked = false;
+  if (c.headTerm === undefined) c.headTerm = 0;
+  if (c.raceCount === undefined) c.raceCount = 0;
+  if (c.isRetiredHead === undefined) c.isRetiredHead = false;
+  if (c.group === undefined) c.group = -1;
+  if (typeof c.group !== 'number' || c.group >= S.groups.length) c.group = -1;
+
+  // 特典马特殊处理
+  if (c.var === 'special_01' || c.var === 'special_00') {
+    c.g = {};
+    return c;
+  }
+  
+  // 补全基因
+  if (!c.id) c.id = uid();
+  if (!c.g) c.g = rg();
+  
+  c.g.col = mapOldColor(c.g.col);
+  c.g.wingCol = mapOldColor(c.g.wingCol);
+  c.g.tailCol = mapOldColor(c.g.tailCol);
+  
+  if (!c.g.win) c.g.win = 'none';
+  if (!c.g.leg) c.g.leg = pk(P.leg.o).k;
+  if (!c.g.bod) c.g.bod = pk(P.bod.o).k;
+  if (!c.g.hor) c.g.hor = pk(P.hor.o).k;
+  if (!c.g.tai) c.g.tai = pk(P.tai.o).k;
+  if (!c.g.eye) c.g.eye = pk(P.eye.o).k;
+  
+  if (!CL[c.g.col]) c.g.col = pk(CK);
+  if (!CL[c.g.wingCol]) c.g.wingCol = pk(CK);
+  if (!CL[c.g.tailCol]) c.g.tailCol = pk(CK);
+  
+  return c;
+}
 function al(d){
   if(!d) return false;
   
-  S.c = d.c || [];
-  S.a = d.a || [];
-  S.d = d.d || {};
-  S.r = d.r != null ? d.r : 20;
   S.farmName = d.farmName || '我的马场';
+  S.farmId = d.farmId || genFarmId();
+  S.r = d.r != null ? d.r : 20;
   S.points = d.points || 0;
   S.hoof = d.hoof || 0;
   S.cap = d.cap || 50;
   S.defaultHatchGroup = d.defaultHatchGroup !== undefined ? d.defaultHatchGroup : -1;
-    S.groups = d.groups || ['New Cave'];
-  // 🌟 强制去重，防止旧档数据重复
-  S.groups = S.groups.filter(function(item, pos, self) {
-    return self.indexOf(item) == pos;
-  });
+  S.groups = d.groups || ['New Cave'];
+  S.groups = S.groups.filter(function(item, pos, self) { return self.indexOf(item) == pos; });
   S.groupOpen = d.groupOpen || { '-1': true, '0': true };
   S.eggCap = d.eggCap || 10;
   if(S.cap > CAPMAX) S.cap = CAPMAX;
@@ -53,8 +106,8 @@ function al(d){
   S.trainSuccess = d.trainSuccess || 0;
   S.unlocked00 = d.unlocked00 || false;
   S.st = d.st || [];
- S.stT = d.stT || Date.now(); // 如果旧档没这个字段，就直接设为当前时间
- S.st00T = d.st00T || S.stT;  // 同理兜底
+  S.stT = d.stT || Date.now();
+  S.st00T = d.st00T || S.stT;
   
   S.stud = d.stud || null;
   S.studL = d.studL || 0;
@@ -73,72 +126,23 @@ function al(d){
   S.lastRescue = d.lastRescue || 0;
   S.refreshData = d.refreshData || { date: '', s01: 5, s00: 5 };
   
-  // 7. 遍历马群 (S.c)
-  for(var i = 0; i < S.c.length; i++){
-    if(S.c[i].name === undefined) S.c[i].name = '';
-    if(S.c[i].hasBeenStud === undefined) S.c[i].hasBeenStud = false;
-    if(S.c[i].trainSpeed === undefined) S.c[i].trainSpeed = 0;
-    if(S.c[i].trained === undefined) S.c[i].trained = false;
-    if(S.c[i].pie === undefined) S.c[i].pie = false;
-    if(S.c[i].pieColor === undefined) S.c[i].pieColor = 'w';
-    if(S.c[i].firefly === undefined) S.c[i].firefly = false;
-    if(S.c[i].induceHerm === undefined) S.c[i].induceHerm = false;
-    if(S.c[i].sterile === undefined) S.c[i].sterile = false;
-    if(S.c[i].doubleWomb === undefined) S.c[i].doubleWomb = false;
-    if(S.c[i].usedHfan === undefined) S.c[i].usedHfan = false;
-    if(S.c[i].usedHfeng === undefined) S.c[i].usedHfeng = false;
-    if(S.c[i].headTerm === undefined) S.c[i].headTerm = 0;
-    if(S.c[i].raceCount === undefined) S.c[i].raceCount = 0;
-    if(S.c[i].isRetiredHead === undefined) S.c[i].isRetiredHead = false;
-    if(S.c[i].isLocked === undefined) S.c[i].isLocked = false;
-    if(S.c[i].group === undefined) S.c[i].group = -1;
-       // 强制把非法组别移入未分类（防旧档、防手滑写错）
-    if(typeof S.c[i].group !== 'number' || S.c[i].group >= S.groups.length) {
-      S.c[i].group = -1;
-    }
-    
-    S.c[i].g.col = mapOldColor(S.c[i].g.col);
-    S.c[i].g.wingCol = mapOldColor(S.c[i].g.wingCol);
-    S.c[i].g.tailCol = mapOldColor(S.c[i].g.tailCol);
+  S.c = d.c || [];
+  S.a = d.a || [];
+  S.d = d.d || {};
+  
+  // 核心：统一丢进洗刷机！
+  var allHids = [];
+  for(var i=0; i<S.c.length; i++) {
+    S.c[i] = fixHorse(S.c[i], allHids);
+    if(S.c[i].hid) allHids.push(S.c[i].hid);
+  }
+  for(var j=0; j<S.a.length; j++) {
+    S.a[j] = fixHorse(S.a[j], allHids);
+    if(S.a[j].hid) allHids.push(S.a[j].hid);
   }
   
-  // 遍历档案 (S.a) 
-for(var j=0;j<S.a.length;j++){
-  if(S.a[j].var === 'special_01' || S.a[j].var === 'special_00') { 
-    S.a[j].g = {}; 
-    continue; 
-  }
-  
-  if(!S.a[j].id) S.a[j].id = uid();
-  if(!S.a[j].g) S.a[j].g = rg();
-  
-  // 🌟 核心：给档案里的马做旧颜色转换
-  S.a[j].g.col = mapOldColor(S.a[j].g.col);
-  S.a[j].g.wingCol = mapOldColor(S.a[j].g.wingCol);
-  S.a[j].g.tailCol = mapOldColor(S.a[j].g.tailCol);
-    
-    if(S.a[j].name === undefined) S.a[j].name = '';
-    if(S.a[j].hasBeenStud === undefined) S.a[j].hasBeenStud = false;
-    if(S.a[j].trainSpeed === undefined) S.a[j].trainSpeed = 0;
-    if(S.a[j].trained === undefined) S.a[j].trained = false;
-    if(S.a[j].pie === undefined) S.a[j].pie = false;
-    if(S.a[j].pieColor === undefined) S.a[j].pieColor = 'w';
-    if(S.a[j].firefly === undefined) S.a[j].firefly = false;
-    if(S.a[j].induceHerm === undefined) S.a[j].induceHerm = false;
-    if(S.a[j].sterile === undefined) S.a[j].sterile = false;
-    if(S.a[j].doubleWomb === undefined) S.a[j].doubleWomb = false;
-    if(S.a[j].headTerm === undefined) S.a[j].headTerm = 0;
-    if(S.a[j].raceCount === undefined) S.a[j].raceCount = 0;
-    if(S.a[j].isRetiredHead === undefined) S.a[j].isRetiredHead = false;
-    if(S.a[j].isLocked === undefined) S.a[j].isLocked = false;
-    
-    // 🌟 核心兼容：同上
-    if(!CL[S.a[j].g.col]) S.a[j].g.col = pk(CK);
-    if(!CL[S.a[j].g.wingCol]) S.a[j].g.wingCol = pk(CK);
-    if(!CL[S.a[j].g.tailCol]) S.a[j].g.tailCol = pk(CK);
-  }
   migrateDexColors();
-   return true; 
+  return true;
 }
 
 // ==== 1.20 48色系统 ====
@@ -279,6 +283,12 @@ var ACHS = [
   { id: 'penny', n: '在月亮的另一面，有六枚便士', d: '解锁缄默商店' }
 ];
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+var ID_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function idRand(len){var s='';for(var i=0;i<len;i++)s+=ID_CHARSET[Math.floor(Math.random()*ID_CHARSET.length)];return s;}
+function genFarmId(){return 'F-'+idRand(6)+'-'+idRand(4);}
+function farmIdPrefix(farmId){var p=(farmId||'').split('-');return p.length>=2?p[1]:idRand(6);}
+function collectAllHids(){var a=[];for(var i=0;i<S.c.length;i++)if(S.c[i].hid)a.push(S.c[i].hid);for(var j=0;j<S.a.length;j++)if(S.a[j].hid)a.push(S.a[j].hid);return a;}
+function genHorseHid(farmId,existing){var pre=farmIdPrefix(farmId);var t=0;while(t<100){var hid=pre+'-'+idRand(4);if(!existing||existing.indexOf(hid)<0)return hid;t++;}return pre+'-'+idRand(6);}
 function pk(a){return a[Math.floor(Math.random()*a.length)]}
 function fo(k,id){var o=P[k].o;for(var i=0;i<o.length;i++)if(o[i].k===id)return o[i];return o[0]}
 function pbw(o){var t=0,i;for(i=0;i<o.length;i++)t+=TW[o[i].t];var r=Math.random()*t;for(i=0;i<o.length;i++){r-=TW[o[i].t];if(r<=0)return o[i]}return o[o.length-1]}
@@ -288,26 +298,20 @@ function rSx(){var t=0,k;for(k in SX)t+=SX[k].w;var r=Math.random()*t;for(k in S
 function rS(c){var s=0;for(var i=0;i<RK.length;i++){var o=fo(RK[i],c.g[RK[i]]);if(o.t==='e')s+=5;else if(o.t==='r')s+=2}return s}
 function rSFull(c){if(c.var==='special_01'||c.var==='special_00')return 40;return rS(c)}
 function canBW(a,b){if(a.sx==='h'||b.sx==='h')return true;return a.sx!==b.sx}
-// ==== newC 新马生成逻辑====
 function newC(gen, opt) {
   gen = gen || 0;
   opt = opt || {};
   var now = Date.now();
-  
-  // 1. 随机性别
   var sx = rSx();
-  
-  // 2. 三级突变判定（不育/双子宫）
   var st = false, dw = false;
   if ((sx === 'm' || sx === 'h') && Math.random() < T3_RATE) st = true;
   if ((sx === 'f' || sx === 'h') && Math.random() < T3_RATE) dw = true;
   
-  // 3. 组装基础马匹数据
   var c = {
     id: uid(),
     gen: gen,
     par: [],
-    g: rg(), // 调用随机基因生成
+    g: rg(),
     sx: sx,
     mut: null,
     var: null,
@@ -315,34 +319,20 @@ function newC(gen, opt) {
     cd: 0,
     hat: 0,
     store: !!opt.store,
-    name: '',
-    hasBeenStud: false,
-    trainSpeed: 0,
-    trained: false,
-    pie: false,
-    pieColor: 'w',
-    firefly: false,
-    induceHerm: false,
     sterile: st,
-    doubleWomb: dw,
-    group: -1
+    doubleWomb: dw
   };
   
-  // 🌟 翅膀判定
   if (opt.store) {
-    // 如果是商店卖的：90% 概率强制无翅，10% 概率保留随机出来的翅膀
-    if (Math.random() >= 0.10) {
-      c.g.win = 'none';
-    }
+    if (Math.random() >= 0.10) c.g.win = 'none';
   } else {
-    // 如果是开局初始送的马：强制无翅
     c.g.win = 'none';
   }
   
-  // 4. 计算孵化时间
   c.hat = opt.inst ? 0 : now + calcHatchTime(c);
   
-  return c;
+  // 🌟 丢进洗刷机
+  return fixHorse(c);
 }
 
 function isH(c){return!c.hat||c.hat<=Date.now()}
@@ -529,14 +519,26 @@ function breed(a, b) {
   a.induceHerm=false;b.induceHerm=false;
   
   var c={
-    id:uid(),gen:Math.max(a.gen,b.gen)+1,par:[a.id,b.id],
-    g:g,sx:cSx,mut:cm,var:null,bc:0,cd:0,hat:0,name:'',
-    hasBeenStud:false,trainSpeed:0,trained:false,pie:pie,
-    pieColor:pieColor,firefly:ff,induceHerm:false,sterile:st,doubleWomb:dw
+    id:uid(),
+    gen:Math.max(a.gen,b.gen)+1,
+    par:[a.id,b.id],
+    g:g,
+    sx:cSx,
+    mut:cm,
+    var:null,
+    bc:0,
+    cd:0,
+    hat:Date.now()+calcHatchTime({g:g, mut:cm, pie:pie}),
+    sterile:st,
+    doubleWomb:dw,
+    pie:pie,
+    pieColor:pieColor,
+    firefly:ff,
+    induceHerm:false
   };
-  c.hat=Date.now()+calcHatchTime(c);
   
-  // 底层直接分配分组
+  // 🌟 丢进洗刷机
+  c = fixHorse(c);
   c.group = (typeof S.defaultHatchGroup === 'number' && S.defaultHatchGroup < S.groups.length) ? S.defaultHatchGroup : -1;
   
   return{c:c,mus:mus,a:a,b:b};
@@ -1017,6 +1019,7 @@ function tintImg(img, colorKey) {
 
 var S = {
   farmName: '我的马场',
+  farmId: '',
   c: [],
   a: [],
   d: {},
@@ -1761,7 +1764,19 @@ if(c.sterile)muts.push('<span style="color:var(--sterile)">不育</span>');
 if(c.doubleWomb)muts.push('<span style="color:var(--gold)">双子宫</span>');
 var mutStr=muts.length?' · '+muts.join(' · '):'';
 
-var h='<div class="mdt">'+(c.isLocked ? '🔒 ' : '')+(c.name?'「'+c.name+'」':'')+'第 '+c.gen+' 代 · '+si.s+' '+si.n+'</div><div style="font-size:11px;color:var(--page-dim);margin-bottom:8px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>';
+var idLine = '';
+if(c.hid) {
+  idLine += '<div style="font-size:11px; color:var(--page-muted); margin-bottom:6px; letter-spacing:0.5px;">🆔 '+c.hid+'</div>';
+}
+if(c.currentFarmId) {
+  if(c.birthFarmId && c.birthFarmId !== c.currentFarmId) {
+    idLine += '<div style="font-size:11px; color:var(--page-muted); margin-bottom:4px; word-break:break-all; line-height:1.4;">🏡 出生于: '+(c.birthFarmName||'未知')+' ('+c.birthFarmId+')</div>';
+    idLine += '<div style="font-size:11px; color:var(--page-muted); margin-bottom:8px; word-break:break-all; line-height:1.4;">🏡 现所在: '+(c.currentFarmName||'未知')+' ('+c.currentFarmId+')</div>';
+  } else {
+    idLine += '<div style="font-size:11px; color:var(--page-muted); margin-bottom:8px; word-break:break-all; line-height:1.4;">🏡 马场: '+(c.currentFarmName||'未知')+' ('+c.currentFarmId+')</div>';
+  }
+}
+var h='<div class="mdt">'+(c.isLocked ? '🔒 ' : '')+(c.name?'「'+c.name+'」':'')+'第 '+c.gen+' 代 · '+si.s+' '+si.n+'</div>'+idLine+'<div style="font-size:11px;color:var(--page-dim);margin-bottom:8px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>';
   h += buildGeneHtml(c);
   
   h += '<div class="ma">';
@@ -1804,9 +1819,8 @@ function moveHorseGroup(id, targetG) {
   var c = findC(id);
   if(!c) return;
   c.group = parseInt(targetG);
-  sv(); closeM(); render();
+  sv(); closeM(); render('list');
 }
-
 // 🌟 自定义输入框弹窗（完美适配手机键盘防遮挡 + PC端焦点稳定）
 function customPrompt(title, defaultValue, callback) {
   var h = '<div class="mdt">'+title+'</div>';
@@ -1860,9 +1874,16 @@ function rename(id){
     if(n === null) return;
     n = n.trim();
     if(n.length > 25) return alert('名字太长了！最多只能输入 25 个字符。');
+    
+    // 同样限制非法字符
+    var validPattern = /^[\u4e00-\u9fa5a-zA-Z0-9_\-\s.\u3000-\u303F]*$/;
+    if (!validPattern.test(n)) {
+      return alert('⚠️ 名字包含非法字符！只能使用中英文、数字和简单标点。');
+    }
+
     c.name = n;
     if(c.name) unlock('named');
-    sv(); render();
+    sv(); closeM(); render('list');
   });
 }
 function useP(id,t){var c=findC(id);if(!c)return;if(t==='m'){if(S.p.m<=0||c.mut||c.pie)return;S.p.m--;c.mut=pk(MT)}else if(t==='v'){
@@ -1946,7 +1967,7 @@ function dlExp(){
 
     var d={c:S.c,a:S.a,d:S.d,r:S.r,p:S.p,st:S.st,stT:S.stT,st00T:S.st00T,stud:S.stud,studL:S.studL,studT:S.studT,studN:S.studN,ach:S.ach,
       cap:S.cap, groups:S.groups, groupOpen:S.groupOpen, eggCap:S.eggCap,head:S.head,headStart:S.headStart,headRace:S.headRace,headLastTick:S.headLastTick,headTerm:S.headTerm,points:S.points,hoof:S.hoof,trainCount:S.trainCount,hoofSubmitted:S.hoofSubmitted,trainFail:S.trainFail,trainSuccess:S.trainSuccess,unlocked00:S.unlocked00,
-      headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,displayMode:S.displayMode};
+      headRaceCount:S.headRaceCount, refreshData:S.refreshData,farmName:S.farmName,farmId:S.farmId,displayMode:S.displayMode};
     
     var jsonString = JSON.stringify(d);
     var encoded = btoa(unescape(encodeURIComponent(jsonString)));
@@ -1971,7 +1992,6 @@ function dlExp(){
 function cpExp(){var ta=$('expA');ta.select();ta.setSelectionRange(0,999999);try{document.execCommand('copy');alert('已复制');}catch(e){alert('请长按手动复制')}}
 function impSave(){var f=ce('input');f.type='file';f.accept='.json,application/json';f.onchange=function(e){var file=e.target.files[0];if(!file)return;var r=new FileReader();r.onload=function(ev){doImp(ev.target.result)};r.readAsText(file)};f.click()}
 function pickFile(){var f=$('impFile');f.onchange=function(e){var file=e.target.files[0];if(!file)return;var r=new FileReader();r.onload=function(ev){$('impA').value=ev.target.result};r.readAsText(file)};f.click()}
-// ==== 替换开始：doImp ====
 function doImp(t){
   if(!confirm('⚠️ 警告：导入存档将完全覆盖当前的所有马匹、胡萝卜和进度！\n确定要读取该文件吗？'))return;
   try{
@@ -1991,110 +2011,17 @@ function doImp(t){
     try { d = JSON.parse(jsonStr); } catch (parseError) { throw new Error('文件内容已损坏，无法读取！'); }
     if(!d.c)throw new Error('无效的存档文件（缺少核心马匹数据）');
 
-    S.c=d.c||[]; S.a=d.a||[]; S.d=d.d||{}; S.r=d.r!=null?d.r:20;
-    S.farmName=d.farmName||'我的马场'; S.points=d.points||0;S.cap=d.cap||50;S.defaultHatchGroup=d.defaultHatchGroup||-1; S.groups=d.groups||['New Cave']; S.groupOpen=d.groupOpen||{'-1':true,'0':true}; S.eggCap=d.eggCap||10; S.ach=d.ach||{};
-    S.st=d.st||[]; S.stT=d.stT||0; S.st00T=d.st00T||S.stT||0; S.unlocked00=d.unlocked00||false;
-    S.hoof=d.hoof||0; S.trainCount=d.trainCount!==undefined?d.trainCount:1;
-    S.hoofSubmitted=d.hoofSubmitted||[false,false,false,false,false];
-    S.trainFail=d.trainFail||0; S.trainSuccess=d.trainSuccess||0;
+    // 🌟 直接调用 al 洗刷整个游戏数据，不再重复写一遍！
+    al(d);
     
-    S.p = d.p || {m:0,v:0,i:0,fire:0,dispel:0,hfan:0,hfeng:0,hmix:0,hdrag:0,hnight:0};
-    if(S.p.hfan===undefined)S.p.hfan=0; if(S.p.hfeng===undefined)S.p.hfeng=0;
-    if(S.p.hmix===undefined)S.p.hmix=0; if(S.p.hdrag===undefined)S.p.hdrag=0; if(S.p.hnight===undefined)S.p.hnight=0;
+    if(!S.stT) S.stT = Date.now();
+    if(!S.st00T) S.st00T = Date.now();
     
-    S.stud=d.stud||null; S.studL=d.studL||0; S.studT=d.studT||0; S.studN=d.studN||0;
-    S.head=d.head||null; S.headStart=d.headStart||0; S.headRace=d.headRace||0;
-    S.headLastTick=d.headLastTick||0; S.headTerm=d.headTerm||0; S.headRaceCount=d.headRaceCount||0;
-    S.refreshData=d.refreshData||{ date: '', s01: 5, s00: 5 };
-    S.sel=[];
-    
-    // 遍历马群 (S.c)
-    for(var i=0;i<S.c.length;i++){
-      if(!S.c[i].id) S.c[i].id = uid();
-      if(!S.c[i].g) S.c[i].g = rg();
-      
-      
-      S.c[i].g.col = mapOldColor(S.c[i].g.col);
-      S.c[i].g.wingCol = mapOldColor(S.c[i].g.wingCol);
-      S.c[i].g.tailCol = mapOldColor(S.c[i].g.tailCol);
-      
-      if(!S.c[i].g.win) S.c[i].g.win = 'none';
-      if(!S.c[i].g.leg) S.c[i].g.leg = pk(P.leg.o).k;
-      if(!S.c[i].g.bod) S.c[i].g.bod = pk(P.bod.o).k;
-      if(!S.c[i].g.hor) S.c[i].g.hor = pk(P.hor.o).k;
-      if(!S.c[i].g.tai) S.c[i].g.tai = pk(P.tai.o).k;
-      if(!S.c[i].g.eye) S.c[i].g.eye = pk(P.eye.o).k;
-      if(S.c[i].name===undefined)S.c[i].name='';
-      if(S.c[i].hasBeenStud===undefined)S.c[i].hasBeenStud=false;
-      if(S.c[i].trainSpeed===undefined)S.c[i].trainSpeed=0;
-      if(S.c[i].trained===undefined)S.c[i].trained=false;
-      if(S.c[i].pie===undefined)S.c[i].pie=false;
-      if(S.c[i].pieColor===undefined)S.c[i].pieColor='w';
-      if(S.c[i].firefly===undefined)S.c[i].firefly=false;
-      if(S.c[i].induceHerm===undefined)S.c[i].induceHerm=false;
-      if(S.c[i].sterile===undefined)S.c[i].sterile=false;
-      if(S.c[i].doubleWomb===undefined)S.c[i].doubleWomb=false;
-      if(S.c[i].isLocked===undefined)S.c[i].isLocked=false;
-      if(S.c[i].group === undefined) S.c[i].group = -1;
-      // 强制把非法组别移入未分类（防旧档、防手滑写错）
-    if(typeof S.c[i].group !== 'number' || S.c[i].group >= S.groups.length) {
-      S.c[i].group = -1;
-       
-    }
-    }
-    
-    // 遍历档案 (S.a) —— 去除了重复的垃圾代码
-for(var j=0;j<S.a.length;j++){
-  if(S.a[j].var === 'special_01' || S.a[j].var === 'special_00') { 
-    S.a[j].g = {}; 
-    continue; 
-  }
-  
-  if(!S.a[j].id) S.a[j].id = uid();
-  if(!S.a[j].g) S.a[j].g = rg();
-  
-  // 给档案里的马做旧颜色转换
-  S.a[j].g.col = mapOldColor(S.a[j].g.col);
-  S.a[j].g.wingCol = mapOldColor(S.a[j].g.wingCol);
-  S.a[j].g.tailCol = mapOldColor(S.a[j].g.tailCol);
-      
-      // 核心兼容
-      if(!CL[S.a[j].g.col]) S.a[j].g.col = pk(CK);
-      if(!CL[S.a[j].g.wingCol]) S.a[j].g.wingCol = pk(CK);
-      if(!CL[S.a[j].g.tailCol]) S.a[j].g.tailCol = pk(CK);
-      
-      if(!S.a[j].g.win) S.a[j].g.win = 'none';
-      if(!S.a[j].g.leg) S.a[j].g.leg = pk(P.leg.o).k;
-      if(!S.a[j].g.bod) S.a[j].g.bod = pk(P.bod.o).k;
-      if(!S.a[j].g.hor) S.a[j].g.hor = pk(P.hor.o).k;
-      if(!S.a[j].g.tai) S.a[j].g.tai = pk(P.tai.o).k;
-      if(!S.a[j].g.eye) S.a[j].g.eye = pk(P.eye.o).k;
-      if(S.a[j].name===undefined)S.a[j].name='';
-      if(S.a[j].hasBeenStud===undefined)S.a[j].hasBeenStud=false;
-      if(S.a[j].trainSpeed===undefined)S.a[j].trainSpeed=0;
-      if(S.a[j].trained===undefined)S.a[j].trained=false;
-      if(S.a[j].pie===undefined)S.a[j].pie=false;
-      if(S.a[j].pieColor===undefined)S.a[j].pieColor='w';
-      if(S.a[j].firefly===undefined)S.a[j].firefly=false;
-      if(S.a[j].induceHerm===undefined)S.a[j].induceHerm=false;
-      if(S.a[j].sterile===undefined)S.a[j].sterile=false;
-      if(S.a[j].doubleWomb===undefined)S.a[j].doubleWomb=false;
-      if(S.a[j].isLocked===undefined)S.a[j].isLocked=false;
-    }
-    // 先执行图鉴颜色迁移
-    migrateDexColors();
-
-   // 🌟 1. 继承旧存档的时间，防止SL刷商店
-if(!S.stT) S.stT = Date.now();
-if(!S.st00T) S.st00T = Date.now();
-
-// 🌟 2. 洗掉旧商店的脏数据（只重新生成马，不修改时间）
-mkStore(true); 
-
-sv();
-closeM();
-render();
-alert('✅ 存档导入成功！');
+    mkStore(true); 
+    sv();
+    closeM();
+    render();
+    alert('✅ 存档导入成功！');
   }catch(e){
     alert('❌ 导入失败：'+e.message);
   }
@@ -2200,250 +2127,201 @@ html += '<div style="text-align:center; color:var(--st-ready); font-weight:bold;
   
   showM(html);
 }
-function render(){
-   checkSoftLock(); // 🌟 每次渲染前检查是否死锁（0匹马且没钱）
+// 🌟 模块化渲染引擎
+function render(scope) {
+  scope = scope || 'all';
+  var _scrollY = window.scrollY;
+  
+  checkSoftLock();
+  
   try {
     for(var mi=0; mi<S.c.length; mi++) mkDex(S.c[mi]);
-    $('stat').innerHTML = '马匹 ' + S.c.length + '/' + S.cap + ' · 孵化 ' + S.c.filter(function(c){return !isH(c)}).length + ' · 档案 ' + S.a.length + ' · 图鉴 ' + Object.keys(S.d).length + ' · <span class="cr">🥕 ' + S.r + '</span> · <span style="color:var(--hoof-fg)">🧲 ' + (S.hoof||0) + '</span> · <span style="color:var(--gold)">✨ ' + (S.points||0) + '</span>';
   } catch(e) {}
 
-  try {
-    if($('farmNameBox')) $('farmNameBox').textContent = '🏡 ' + (S.farmName || '我的马场');
-  } catch(e) {}
+  if (scope === 'all' || scope === 'top') {
+    try {
+      $('stat').innerHTML = '马匹 ' + S.c.length + '/' + S.cap + ' · 孵化 ' + S.c.filter(function(c){return !isH(c)}).length + ' · 档案 ' + S.a.length + ' · 图鉴 ' + Object.keys(S.d).length + ' · <span class="cr">🥕 ' + S.r + '</span> · <span style="color:var(--hoof-fg)">🧲 ' + (S.hoof||0) + '</span> · <span style="color:var(--gold)">✨ ' + (S.points||0) + '</span>';
+      if($('farmNameBox')) $('farmNameBox').textContent = '🏡 ' + (S.farmName || '我的马场');
+      if($('farmIdBox')) $('farmIdBox').textContent = S.farmId ? ('🆔 ' + S.farmId) : '';
+    } catch(e) {}
+  }
 
- try {
-    var list = $('list');
-    list.innerHTML = '';
-    var shown = filterList();
-    if(S.head) shown = shown.filter(function(x){return x.id !== S.head});
-    
-   // 🌟 顶部操作栏
-    var batchBar = ce('div');
-    batchBar.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:12px; width:100%;';
-
-    var toggleBatchBtn = ce('button');
-    toggleBatchBtn.className = window._batchMode ? 'danger' : 'test';
-    toggleBatchBtn.style.cssText = 'width:100%; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
-    // 🌟 文本修改
-    toggleBatchBtn.textContent = window._batchMode ? '✖ 取消' : '☑️ 分组选择';
-    toggleBatchBtn.onclick = function(){
-      window._batchMode = !window._batchMode;
-      if(!window._batchMode) S._batchSel = []; // 退出时清空
-      render();
-    };
-
-    if (!window._batchMode) {
-      batchBar.appendChild(toggleBatchBtn);
-    } else {
-      batchBar.appendChild(toggleBatchBtn);
-
-      var batchSel = ce('select');
-      batchSel.className = 'breed-search';
-      batchSel.style.cssText = 'width:100%; min-height:36px; margin:0; font-size:14px; border:2px solid var(--primary-bd);';
-      batchSel.innerHTML = '<option value="">-- 选择目标分组进行转移 --</option>';
-      for(var gi=0; gi<S.groups.length; gi++){
-        batchSel.innerHTML += '<option value="'+gi+'">'+S.groups[gi]+'</option>';
-      }
-      batchSel.onchange = function(){
-        var targetG = parseInt(this.value);
-        if(isNaN(targetG)) return;
-        if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
-        S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
-        S._batchSel = [];
-        sv(); render();
+  if (scope === 'all' || scope === 'list') {
+    try {
+      var list = $('list');
+      list.innerHTML = '';
+      var shown = filterList();
+      if(S.head) shown = shown.filter(function(x){return x.id !== S.head});
+      
+      var batchBar = ce('div');
+      batchBar.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:12px; width:100%;';
+      var toggleBatchBtn = ce('button');
+      toggleBatchBtn.className = window._batchMode ? 'danger' : 'test';
+      toggleBatchBtn.style.cssText = 'width:100%; padding:10px; font-size:14px; min-height:40px; font-weight:bold; border-radius:6px;';
+      toggleBatchBtn.textContent = window._batchMode ? '✖ 取消' : '☑️ 分组选择';
+      toggleBatchBtn.onclick = function(){
+        window._batchMode = !window._batchMode;
+        if(!window._batchMode) S._batchSel = [];
+        render('list');
       };
-      batchBar.appendChild(batchSel);
-    }
 
-    list.appendChild(batchBar);
-
-    // 开始分组渲染
-    var renderGroup = function(groupId, groupName) {
-  // 🌟 修复 0 被当成假值的问题
-  var groupHorses = shown.filter(function(c){ 
-    var g = (c.group === undefined || c.group === null) ? -1 : c.group;
-    return g === groupId; 
-  });
-  if(groupId === -1 && groupHorses.length === 0) return;
-      
-        var det = ce('details');
-      det.className = 'dex-group';
-      
-       det.open = S.groupOpen[groupId] !== false;
-      
-     var summ = ce('summary');
-summ.className = 'dex-group-title';
-// 保留 Flex 布局
-summ.style.cssText = 'display:flex; align-items:center; gap:8px; font-size:15px; color:var(--page-fg); font-weight:bold;';
-
-var titleSpan = ce('span');
-titleSpan.textContent = (groupId===-1?'📦 未分类':groupName) + ' ('+groupHorses.length+')';
-summ.appendChild(titleSpan);
-
-// 独立的改名按钮
-if(groupId >= 0){
-  var editBtn = ce('button');
-  editBtn.className = 'test';
-  // 🌟 margin-left: auto 是灵魂，直接把它推到容器最右侧
-  editBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; margin-left:auto; border-radius:4px;';
-  editBtn.textContent = '✏️ 改名';
-   editBtn.onclick = function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          customPrompt('修改分组名称（最多50字符，1个汉字算2字符）：', groupName, function(newName){
-            if(newName === null) return;
-            newName = newName.trim();
-            if(!newName) newName = 'New Cave ' + groupId;
-            var byteLength = 0;
-            for (var i = 0; i < newName.length; i++) {
-              if (newName.charCodeAt(i) <= 127) byteLength += 1;
-              else byteLength += 2;
-            }
-            if (byteLength > 50) return alert('名字太长了！最多50个字符。');
-            S.groups[groupId] = newName;
-            sv(); render();
-          });
-        };
-  summ.appendChild(editBtn);
-}
-  // 🌟 新增：组内一键全选按钮（仅批量模式下显示）
-      if (window._batchMode && groupHorses.length > 0) {
-        // 判断当前组是否已经全选
-        var allGroupSelected = true;
-        for (var i = 0; i < groupHorses.length; i++) {
-          if (S._batchSel.indexOf(groupHorses[i].id) < 0) {
-            allGroupSelected = false;
-            break;
-          }
+      if (!window._batchMode) {
+        batchBar.appendChild(toggleBatchBtn);
+      } else {
+        batchBar.appendChild(toggleBatchBtn);
+        var batchSel = ce('select');
+        batchSel.className = 'breed-search';
+        batchSel.style.cssText = 'width:100%; min-height:36px; margin:0; font-size:14px; border:2px solid var(--primary-bd);';
+        batchSel.innerHTML = '<option value="">-- 选择目标分组进行转移 --</option>';
+        for(var gi=0; gi<S.groups.length; gi++){
+          batchSel.innerHTML += '<option value="'+gi+'">'+S.groups[gi]+'</option>';
         }
+        batchSel.onchange = function(){
+          var targetG = parseInt(this.value);
+          if(isNaN(targetG)) return;
+          if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
+          S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
+          S._batchSel = [];
+          sv(); render('list');
+        };
+        batchBar.appendChild(batchSel);
+      }
+      list.appendChild(batchBar);
 
-        var groupSelectBtn = ce('button');
-        groupSelectBtn.className = allGroupSelected ? 'primary' : 'test';
-        // 如果没改名按钮，它用 margin-left:auto 顶到右边；如果有改名按钮，它排在后边
-        groupSelectBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; border-radius:4px; ' + (groupId >= 0 ? '' : 'margin-left:auto;');
-        groupSelectBtn.textContent = allGroupSelected ? '☒ 取消本组' : '☑️ 全选本组';
+      var renderGroup = function(groupId, groupName) {
+        var groupHorses = shown.filter(function(c){ 
+          var g = (c.group === undefined || c.group === null) ? -1 : c.group;
+          return g === groupId; 
+        });
+        if(groupId === -1 && groupHorses.length === 0) return;
+          
+        var det = ce('details');
+        det.className = 'dex-group';
+        det.open = S.groupOpen[groupId] !== false;
+          
+        var summ = ce('summary');
+        summ.className = 'dex-group-title';
+        summ.style.cssText = 'display:flex; align-items:center; gap:8px; font-size:15px; color:var(--page-fg); font-weight:bold;';
         
-        groupSelectBtn.onclick = function(e) {
-  e.preventDefault();
-  e.stopPropagation(); // 阻止折叠
-
-  if (allGroupSelected) {
-    // 从总选中里剔除本组的马
-    var groupIds = groupHorses.map(function(h){ return h.id; });
-    S._batchSel = S._batchSel.filter(function(id){ return groupIds.indexOf(id) < 0; });
-  } else {
-    // 把本组的马加入总选中
-    groupHorses.forEach(function(h) {
-      if (S._batchSel.indexOf(h.id) < 0) S._batchSel.push(h.id);
-    });
-  }
-
-  // 🌟 这里就是你要找的 DOM 获取，现在已改为获取纯 div
-  var allChks = det.querySelectorAll('.custom-chk');
-  for(var c=0; c<allChks.length; c++){
-    var el = allChks[c];
-    if (allGroupSelected) {
-      // 取消选中状态
-      el.style.background = 'transparent';
-      el.style.borderColor = 'var(--page-dim)';
-      el.innerHTML = '';
-    } else {
-      // 选中状态
-      el.style.background = 'var(--primary-bg)';
-      el.style.borderColor = 'var(--primary-bg)';
-      el.innerHTML = '<span style="color:var(--primary-fg); font-size:12px; font-weight:bold; line-height:1;">✓</span>';
-    }
-  }
-  
-  // 切换按钮状态
-  groupSelectBtn.textContent = allGroupSelected ? '☑️ 全选本组' : '☒ 取消本组';
-  groupSelectBtn.className = allGroupSelected ? 'test' : 'primary';
-};
+        var titleSpan = ce('span');
+        titleSpan.textContent = (groupId===-1?'📦 未分类':groupName) + ' ('+groupHorses.length+')';
+        summ.appendChild(titleSpan);
         
-        summ.appendChild(groupSelectBtn);
-      }
-         summ.onclick = function(e){
-        setTimeout(function() {
-          S.groupOpen[groupId] = det.open;
-          sv();
-        }, 10);
-      };
-      
-      det.appendChild(summ);
-      
-      var wrap = ce('div');
-      wrap.className = 'gd';
-      for(var m=0; m<groupHorses.length; m++){
-        wrap.appendChild(mkCard(groupHorses[m]));
-      }
-      det.appendChild(wrap);
-      list.appendChild(det);
-    };
-
-    for(var g=0; g<S.groups.length; g++){
-      renderGroup(g, S.groups[g]);
-    }
-    renderGroup(-1, '未分类');
-    
-    $('cCount').textContent = shown.length + '/' + S.c.length + '/' + S.cap;
-  } catch(e) { console.error('马群渲染失败', e); }
-
-   try {
-    var hatchBox = $('hatch');
-    hatchBox.innerHTML = '';
-    var eggs = S.c.filter(function(c){return !isH(c)});
-    $('hatchCount').textContent = eggs.length + ' / ' + (S.eggCap || 10) + ' 个';
-    if(eggs.length === 0) hatchBox.innerHTML = '<div class="em">没有正在孵化的蛋</div>';
-    for(var h=0; h<eggs.length; h++) {
-      hatchBox.appendChild(mkEggCard(eggs[h]));
-    }
-
-    // 🌟 新增：孵化归组设置（傻瓜下拉框）
-    var hSet = $('hatchSettings');
-    if (hSet) {
-      hSet.innerHTML = '';
-      var setDiv = ce('div');
-      setDiv.style.cssText = 'display:flex; align-items:center; justify-content:space-between; background:var(--inner-bg); border:1px dashed var(--inner-bd); padding:8px 12px; border-radius:6px;';
-      setDiv.innerHTML = '<span style="font-size:12px; color:var(--page-dim);">🐣 幼崽孵化后默认前往：</span>';
-      
-      var targetSel = ce('select');
-      targetSel.className = 'breed-search';
-      targetSel.style.cssText = 'width:140px; min-height:28px; margin:0; font-size:12px;';
-      
-      var optUncat = ce('option');
-      optUncat.value = '-1';
-      optUncat.textContent = '📦 未分类';
-      if (S.defaultHatchGroup === -1) optUncat.selected = true;
-      targetSel.appendChild(optUncat);
-
-      for (var g = 0; g < S.groups.length; g++) {
-        var opt = ce('option');
-        opt.value = g;
-        opt.textContent = S.groups[g];
-        if (S.defaultHatchGroup === g) opt.selected = true;
-        targetSel.appendChild(opt);
-      }
-
-      targetSel.onchange = function() {
-        S.defaultHatchGroup = parseInt(this.value);
-        sv();
+        if(groupId >= 0){
+          var editBtn = ce('button');
+          editBtn.className = 'test';
+          editBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; margin-left:auto; border-radius:4px;';
+          editBtn.textContent = '✏️ 改名';
+          editBtn.onclick = function(e) {
+            e.preventDefault(); e.stopPropagation();
+            customPrompt('修改分组名称（最多50字符，1个汉字算2字符）：', groupName, function(newName){
+              if(newName === null) return;
+              newName = newName.trim();
+              if(!newName) newName = 'New Cave ' + groupId;
+              var byteLength = 0;
+              for (var i = 0; i < newName.length; i++) {
+                if (newName.charCodeAt(i) <= 127) byteLength += 1;
+                else byteLength += 2;
+              }
+              if (byteLength > 50) return alert('名字太长了！最多50个字符。');
+              S.groups[groupId] = newName;
+              sv(); render('list');
+            });
+          };
+          summ.appendChild(editBtn);
+        }
+          
+        if (window._batchMode && groupHorses.length > 0) {
+          var allGroupSelected = true;
+          for (var i = 0; i < groupHorses.length; i++) {
+            if (S._batchSel.indexOf(groupHorses[i].id) < 0) { allGroupSelected = false; break; }
+          }
+          var groupSelectBtn = ce('button');
+          groupSelectBtn.className = allGroupSelected ? 'primary' : 'test';
+          groupSelectBtn.style.cssText = 'padding:2px 8px; min-height:22px; font-size:11px; border-radius:4px; ' + (groupId >= 0 ? '' : 'margin-left:auto;');
+          groupSelectBtn.textContent = allGroupSelected ? '☒ 取消本组' : '☑️ 全选本组';
+          groupSelectBtn.onclick = function(e) {
+            e.preventDefault(); e.stopPropagation();
+            if (allGroupSelected) {
+              var groupIds = groupHorses.map(function(h){ return h.id; });
+              S._batchSel = S._batchSel.filter(function(id){ return groupIds.indexOf(id) < 0; });
+            } else {
+              groupHorses.forEach(function(h) { if (S._batchSel.indexOf(h.id) < 0) S._batchSel.push(h.id); });
+            }
+            render('list');
+          };
+          summ.appendChild(groupSelectBtn);
+        }
+          
+        summ.onclick = function(e){
+          setTimeout(function() { S.groupOpen[groupId] = det.open; sv(); }, 10);
+        };
+        det.appendChild(summ);
+        
+        var wrap = ce('div');
+        wrap.className = 'gd';
+        for(var m=0; m<groupHorses.length; m++){ wrap.appendChild(mkCard(groupHorses[m])); }
+        det.appendChild(wrap);
+        list.appendChild(det);
       };
 
-      setDiv.appendChild(targetSel);
-      hSet.appendChild(setDiv);
-    }
-  } catch(e) { console.error('孵化渲染失败', e); }
+      for(var g=0; g<S.groups.length; g++){ renderGroup(g, S.groups[g]); }
+      renderGroup(-1, '未分类');
+      $('cCount').textContent = shown.length + '/' + S.c.length + '/' + S.cap;
+    } catch(e) { console.error('马群渲染失败', e); }
+  }
 
-  try { mkStudUI(); } catch(e) { console.error('种马渲染失败', e); }
-  try { mkStore(false); mkStoreUI(); } catch(e) { console.error('01商店渲染失败', e); }
-  try { mkStore00UI(); } catch(e) { console.error('00商店渲染失败', e); }
-  try { mkHeadUI(); } catch(e) { console.error('头马渲染失败', e); }
-  try { mkArc(); } catch(e) { console.error('档案渲染失败', e); }
-  try { mkDexUI(); } catch(e) { console.error('图鉴渲染失败', e); }
-  try { mkAchUI(); } catch(e) { console.error('成就渲染失败', e); }
-  try { mkBreedUI(); } catch(e) { console.error('繁育UI渲染失败', e); }
-  try { var tmb=$('toggleModeBtn');if(tmb)tmb.textContent=S.displayMode==='color'?'🔳 色块模式':'🔤 文字模式'; } catch(e) {}
-  try { updUI(); } catch(e) { console.error('UI更新失败', e); }
+  if (scope === 'all' || scope === 'hatch') {
+    try {
+      var hatchBox = $('hatch');
+      hatchBox.innerHTML = '';
+      var eggs = S.c.filter(function(c){return !isH(c)});
+      $('hatchCount').textContent = eggs.length + ' / ' + (S.eggCap || 10) + ' 个';
+      if(eggs.length === 0) hatchBox.innerHTML = '<div class="em">没有正在孵化的蛋</div>';
+      for(var h=0; h<eggs.length; h++) { hatchBox.appendChild(mkEggCard(eggs[h])); }
+
+      var hSet = $('hatchSettings');
+      if (hSet) {
+        hSet.innerHTML = '';
+        var setDiv = ce('div');
+        setDiv.style.cssText = 'display:flex; align-items:center; justify-content:space-between; background:var(--inner-bg); border:1px dashed var(--inner-bd); padding:8px 12px; border-radius:6px;';
+        setDiv.innerHTML = '<span style="font-size:12px; color:var(--page-dim);">🐣 幼崽孵化后默认前往：</span>';
+        var targetSel = ce('select');
+        targetSel.className = 'breed-search';
+        targetSel.style.cssText = 'width:140px; min-height:28px; margin:0; font-size:12px;';
+        var optUncat = ce('option');
+        optUncat.value = '-1'; optUncat.textContent = '📦 未分类';
+        if (S.defaultHatchGroup === -1) optUncat.selected = true;
+        targetSel.appendChild(optUncat);
+        for (var g = 0; g < S.groups.length; g++) {
+          var opt = ce('option'); opt.value = g; opt.textContent = S.groups[g];
+          if (S.defaultHatchGroup === g) opt.selected = true;
+          targetSel.appendChild(opt);
+        }
+        targetSel.onchange = function() { S.defaultHatchGroup = parseInt(this.value); sv(); };
+        setDiv.appendChild(targetSel);
+        hSet.appendChild(setDiv);
+      }
+    } catch(e) { console.error('孵化渲染失败', e); }
+  }
+
+  if (scope === 'all' || scope === 'breed') {
+    try { mkBreedUI(); } catch(e) { console.error('繁育UI渲染失败', e); }
+  }
+
+  if (scope === 'all' || scope === 'other') {
+    try { mkStudUI(); } catch(e) {}
+    try { mkStore(false); mkStoreUI(); } catch(e) {}
+    try { mkStore00UI(); } catch(e) {}
+    try { mkHeadUI(); } catch(e) {}
+    try { mkArc(); } catch(e) {}
+    try { mkDexUI(); } catch(e) {}
+    try { mkAchUI(); } catch(e) {}
+    try { var tmb=$('toggleModeBtn'); if(tmb) tmb.textContent=S.displayMode==='color'?'🔳 色块模式':'🔤 文字模式'; } catch(e) {}
+    try { updUI(); } catch(e) {}
+  }
+
+  requestAnimationFrame(function() { window.scrollTo(0, _scrollY); });
 }
 function mkEggCard(c){var cd=ce('div');var isMutEgg=(c.mut||c.pie);cd.className='card egg'+(isMutEgg?' mut-highlight':'');var mb=ce('button');mb.className='mb';mb.textContent='⋯';mb.onclick=(function(id){return function(e){e.stopPropagation();openMenu(id)}})(c.id);cd.appendChild(mb);cd.appendChild(mkPB(c));var gn=ce('div');gn.className='gn';gn.textContent='第 '+c.gen+' 代';cd.appendChild(gn);var st=stTx(c);var stl=ce('div');stl.className='st '+st.cls;stl.setAttribute('data-cid',c.id);stl.textContent=st.text;cd.appendChild(stl);var m=ce('div');m.className='rar';m.textContent=isMutEgg?'✨ 孕育着强大魔力…':'孵化中…';cd.appendChild(m);return cd}
 function mkCard(c){
@@ -3062,51 +2940,51 @@ function updUI(){
 }
 function tick(){
   var now=Date.now();
-  var full=false;
+  var needListRender=false;
+  var needTopRender=false;
   
-// 1. 蛋的倒计时（性能优化版）
-var hasEggs = false;
-for(var i=0;i<S.c.length;i++){
-  if(!isH(S.c[i])) { hasEggs = true; break; }
-}
-if(hasEggs){
+  // 1. 蛋的倒计时优化：先看有没有蛋，没有蛋绝不查 DOM
+  var hasEggs = false;
   for(var i=0;i<S.c.length;i++){
-    var c=S.c[i];
-    if(isH(c)) continue;
-    // 🌟 只有在页面确实存在蛋的时候才去查 DOM，稍微省点算力
-    var el=document.querySelector('.st[data-cid="'+c.id+'"]');
-    if(el){
-      var st=stTx(c);
-      if(el.textContent!==st.text){
-        el.textContent=st.text;
-        el.className='st '+st.cls;
+    if(!isH(S.c[i])) { hasEggs = true; break; }
+  }
+  if(hasEggs){
+    for(var i=0;i<S.c.length;i++){
+      var c=S.c[i];
+      if(isH(c)) continue;
+      // 只有在页面确实存在蛋的时候才去查 DOM
+      var el=document.querySelector('.st[data-cid="'+c.id+'"]');
+      if(el){
+        var st=stTx(c);
+        if(el.textContent!==st.text){
+          el.textContent=st.text;
+          el.className='st '+st.cls;
+        }
       }
     }
   }
-}
   
   var hn=S.c.filter(function(c){return!isH(c)}).length;
-  if(hn<S._hc)full=true;
+  if(hn<S._hc) needListRender=true; // 只有孵化完成时才全量刷新列表
   S._hc=hn;
   
- // 2. 种马产出
+  // 2. 种马产出
   if(S.stud&&S.studL>0){
     var sc=findC(S.stud);
     if(sc){
-      // 🌟 用 while 循环：只要时间够了，就一直生，直到次数用完或时间不够
       while (now - S.studT >= S.studN && S.studL > 0) {
         var bonus=sc.mut?5:0;
         var gain=(rS(sc)+bonus)*2;
         S.r += gain;
         S.studL--;
-        S.studT += S.studN; // 👈 关键：把下一次产出时间往后推，而不是设为当前时间
+        S.studT += S.studN;
         S.studN = SMN + Math.random()*(SMX-SMN);
       }
       if(S.studL <= 0){
         unlock('bye');
         S.stud = null;
       }
-      sv(); full = true;
+      sv(); needTopRender = true; 
     }
   }
   
@@ -3125,32 +3003,32 @@ if(hasEggs){
         var hc2=S.c.splice(idx,1)[0];
         S.a.push(hc2);unlock('archived');unlock('headDead')
       }
-      S.head=null;S.headStart=0;S.headRace=0;sv();full=true;
+      S.head=null;S.headStart=0;S.headRace=0;sv();needListRender=true;
     }
   }
   
-// 4. 01商店刷新与倒计时 (防弹纯时间版)
+  // 4. 01商店刷新
   if(S.stT && now - S.stT >= SRM){
     var missed = Math.floor((now - S.stT) / SRM);
     S.stT = S.stT + (missed * SRM); 
     mkStore(true);
     sv();
-    full = true;
+    needListRender = true;
     showToast('🛒 月光商店 (01) 已刷新！');
   }
   
-  // 5. 00商店刷新与倒计时
+  // 5. 00商店刷新
   if(S.st00T && now - S.st00T >= SRM){
     var missed00 = Math.floor((now - S.st00T) / SRM);
     S.st00T = S.st00T + (missed00 * SRM);
     S.trainCount = 1;
     S.hoofSubmitted = [false,false,false,false,false];
     sv();
-    full = true;
+    needListRender = true;
     showToast('🌑 缄默商店 (00) 已刷新！');
   }
   
-  // 6. 全局倒计时 UI 更新
+  // 6. 全局倒计时 UI 更新（只改文字，不重绘 DOM）
   var r = Math.max(0, SRM - (now - S.stT));
   var sm = Math.floor(r/60000), ss = String(Math.floor(r%60000/1000)).padStart(2,'0');
   var el2 = $('storeTimer'); if(el2) el2.textContent = '刷新 ' + sm + ':' + ss;
@@ -3162,18 +3040,24 @@ if(hasEggs){
   var clk = $('globalClock');
   if(clk) clk.textContent = '🛒月光:' + sm + ':' + ss + ' | 🌑缄默:' + sm00 + ':' + ss00;
   
-  // 7. UI 渲染
-  if(full) render();
-  else updUI();
+  // 7. 只有在必须刷新时才调用重绘
+  if(needListRender) {
+    render('list');
+    render('other');
+  } else if (needTopRender) {
+    render('top');
+  }
 }
-function togSel(id){var c=findC(id);if(!c||!isB(c))return;if(S.a.indexOf(c)>=0)return;var i=S.sel.indexOf(id);if(i>=0)S.sel.splice(i,1);else{if(S.sel.length>=2)S.sel.shift();S.sel.push(id)}render()}
+function togSel(id){var c=findC(id);if(!c||!isB(c))return;if(S.a.indexOf(c)>=0)return;var i=S.sel.indexOf(id);if(i>=0)S.sel.splice(i,1);else{if(S.sel.length>=2)S.sel.shift();S.sel.push(id)}render('list')}
 function doBreed(isTest){if(S.sel.length!==2)return;var a=findC(S.sel[0]),b=findC(S.sel[1]);if(!a||!b||!isH(a)||!isH(b))return;if(a.var||b.var||(a.sterile&&!a.tempBreed)||(b.sterile&&!b.tempBreed))return;if(!canBW(a,b))return;if(!isTest&&(!canB(a)||!canB(b)))return;
   if(!isTest&&S.c.filter(function(c){return!isH(c)}).length>=(S.eggCap||10)){alert('幼崽栏已满 ('+(S.eggCap||10)+'/'+(S.eggCap||10)+')，请等待孵化');return}
   if(!isTest&&S.c.length>=S.cap){alert('马群已满');return}
   var cost=Math.floor(Math.random()*2)+2;if(!isTest&&S.r<cost){alert('胡萝卜不够 (需要2-3根)');return}
   var r=breed(a,b);var c=r.c,mus=r.mus;
   if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
-    {var c2,mus2;if(Math.random()<0.5){c2=JSON.parse(JSON.stringify(c));c2.id=uid();mus2=mus.slice()}else{
+    {var c2,mus2;
+      if(Math.random()<0.5){c2=JSON.parse(JSON.stringify(c));c2.id=uid();c2.hid=genHorseHid(S.farmId, collectAllHids());mus2=mus.slice()}
+      else{
       var r2=breed(a,b);c2=r2.c;c2.hat=0;mus2=r2.mus}S.c.push(c2);mkDex(c2);checkAch(c2,mus2,a,b);unlock('twin')}S.sel=[];sv();render()}
 function toggleDisplayMode() {
   showToast('🔄 正在重构界面...');
@@ -3209,7 +3093,8 @@ function toggleTheme() {
 function init(){
   var l=false;try{l=ld()}catch(e){}
   if(!l){
-    S.c=[newC(0,{inst:true}),newC(0,{inst:true}),newC(0,{inst:true})];
+  S.farmId = genFarmId();
+  S.c=[newC(0,{inst:true}),newC(0,{inst:true}),newC(0,{inst:true})];
     for(var i=0;i<S.c.length;i++)mkDex(S.c[i]);
     mkStore(true);
     S.stT = Date.now(); // 🌟 新档初始化时间
@@ -3230,10 +3115,20 @@ function init(){
   render();
 }
 $('svBtn').onclick=openSave;
-$('sName').oninput=function(){render()};
-$('sSex').onchange=function(){render()};
+var _filterTimer = null;
+$('sName').oninput=function(){
+  clearTimeout(_filterTimer);
+  _filterTimer = setTimeout(function(){ render('list'); }, 300);
+};
+$('sSex').onchange=function(){ setTimeout(function(){ render('list'); }, 60); };
 function initColorSelect(){var sel=$('sColor');if(!sel||sel.options.length>1)return;for(var i=0;i<CK.length;i++){var opt=ce('option');opt.value=CK[i];opt.textContent=CL[CK[i]][0];sel.appendChild(opt)}}
-if($('dexSearch'))$('dexSearch').oninput=function(){mkDexUI()};
+if($('dexSearch')){
+  var _dexTimer = null;
+  $('dexSearch').oninput = function(){ 
+    clearTimeout(_dexTimer);
+    _dexTimer = setTimeout(mkDexUI, 300); 
+  };
+}
 $('modal').onclick=function(e){if(e.target.id==='modal')closeM()};
 function clearGame(){
   if(!confirm('确定要彻底清空所有数据重新开始吗？此操作不可逆！')) return;
@@ -3242,7 +3137,8 @@ function clearGame(){
   
   // 全面重置所有状态，绝不残留！
   S.farmName = '我的马场';
-  S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
+S.farmId = genFarmId();
+S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
   S.a = [];
   S.d = {};
   S.sel = [];
@@ -3283,8 +3179,8 @@ function clearGame(){
   render();
 }
 initColorSelect();
-$('sColor').onchange=function(){render()};
-$('sMut').onchange=function(){render()};
+$('sColor').onchange=function(){ setTimeout(function(){ render('list'); }, 60); };
+$('sMut').onchange=function(){ setTimeout(function(){ render('list'); }, 60); };
 function breedPool(side){
   var sInp=$('breed'+side+'Search');
   var q=sInp?sInp.value.trim().toLowerCase():'';
@@ -3364,45 +3260,68 @@ function mkBreedUI(){
   if(!$('breedM'))return;
   if(!S.breedSort)S.breedSort='default';
   
-  // 初始化颜色和稀有度下拉框
   var fc = $('breedFilterCol');
   if(fc && fc.options.length<=1) {
     for(var i=0;i<CK.length;i++){ var opt=ce('option'); opt.value=CK[i]; opt.textContent=CL[CK[i]][0]; fc.appendChild(opt);}
-     fc.onchange = function(){ setTimeout(mkBreedUI, 50); };
+    fc.onchange = function(){ setTimeout(mkBreedUI, 60); };
   }
   var fr = $('breedFilterRarity');
   if(fr && fr.options.length<=1) {
     fr.innerHTML += '<option value="c">常见部件</option><option value="r">稀有部件</option><option value="e">罕见部件</option>';
-      fr.onchange = function(){ setTimeout(mkBreedUI, 50); };
+    fr.onchange = function(){ setTimeout(mkBreedUI, 60); };
   }
 
-  var mArr=breedPool('M');
-  var mBox=$('breedM');
-  mBox.innerHTML='';
-  if(mArr.length===0)mBox.innerHTML='<div class="em" style="padding:6px">没有可用父本</div>';
-  for(var i=0;i<mArr.length;i++)mBox.appendChild(mkBreedItem(mArr[i],S.selM,'M',S.selF));
-  
-  var fArr=breedPool('F');
-  var fBox=$('breedF');
-  fBox.innerHTML='';
-  if(fArr.length===0)fBox.innerHTML='<div class="em" style="padding:6px">没有可用母本</div>';
-  for(var j=0;j<fArr.length;j++)fBox.appendChild(mkBreedItem(fArr[j],S.selF,'F',S.selM));
-  
-  // 手机端下拉框更新
+  // 🌟 核心优化：渲染列表函数。如果传了 updateOnly，就不重新画卡片
+  var renderList = function(updateOnly) {
+    var mArr=breedPool('M');
+    var fArr=breedPool('F');
+    
+    var mBox=$('breedM'), fBox=$('breedF');
+    
+    if (!updateOnly) {
+      mBox.innerHTML='';
+      if(mArr.length===0) mBox.innerHTML='<div class="em" style="padding:6px">没有可用父本</div>';
+      for(var i=0;i<mArr.length;i++) mBox.appendChild(mkBreedItem(mArr[i],S.selM,'M',S.selF));
+      
+      fBox.innerHTML='';
+      if(fArr.length===0) fBox.innerHTML='<div class="em" style="padding:6px">没有可用母本</div>';
+      for(var j=0;j<fArr.length;j++) fBox.appendChild(mkBreedItem(fArr[j],S.selF,'F',S.selM));
+    } else {
+      // 只更新高亮状态
+      var itemsM = mBox.querySelectorAll('.breed-item');
+      for(var i=0;i<itemsM.length;i++) itemsM[i].classList.toggle('sel', itemsM[i].dataset.id === S.selM);
+      var itemsF = fBox.querySelectorAll('.breed-item');
+      for(var j=0;j<itemsF.length;j++) itemsF[j].classList.toggle('sel', itemsF[j].dataset.id === S.selF);
+    }
+  };
+
+  // 初始渲染
+  renderList(false);
+
+  // 暴露一个方法给 mkBreedItem 用，点选时只改样式
+  window._updateBreedSelection = function(side, id) {
+    if(side==='M') S.selM = (S.selM===id ? null : id);
+    else S.selF = (S.selF===id ? null : id);
+    renderList(true); // 更新高亮
+    updateMidInfo();  // 更新中间文字
+  };
+
+  // 手机端下拉框
   var mSel = $('breedMSelect');
   if(mSel){
     mSel.innerHTML='<option value="">选择父本</option>';
+    var mArr = breedPool('M');
     for(var i=0;i<mArr.length;i++){ var opt=ce('option'); opt.value=mArr[i].id; opt.textContent='第'+mArr[i].gen+'代 '+(mArr[i].name||''); if(S.selM===mArr[i].id) opt.selected=true; mSel.appendChild(opt); }
-    mSel.onchange=function(){ S.selM=this.value||null; mkBreedUI(); };
+    mSel.onchange=function(){ S.selM=this.value||null; renderList(true); updateMidInfo(); };
   }
   var fSel = $('breedFSelect');
   if(fSel){
     fSel.innerHTML='<option value="">选择母本</option>';
+    var fArr = breedPool('F');
     for(var j=0;j<fArr.length;j++){ var opt=ce('option'); opt.value=fArr[j].id; opt.textContent='第'+fArr[j].gen+'代 '+(fArr[j].name||''); if(S.selF===fArr[j].id) opt.selected=true; fSel.appendChild(opt); }
-    fSel.onchange=function(){ S.selF=this.value||null; mkBreedUI(); };
+    fSel.onchange=function(){ S.selF=this.value||null; renderList(true); updateMidInfo(); };
   }
 
-  // 生成大头像逻辑
   var createAvatar = function(c) {
     var div = ce('div');
     div.style.cssText = 'text-align:center; display:flex; flex-direction:column; align-items:center;';
@@ -3416,54 +3335,51 @@ function mkBreedUI(){
     return div;
   };
 
-  // 更新所有大头像容器
-  var ma = $('breedMAvatar'); if(ma){ma.innerHTML=''; if(S.selM){var c=findC(S.selM); if(c) ma.appendChild(createAvatar(c));}}
-  var fa = $('breedFAvatar'); if(fa){fa.innerHTML=''; if(S.selF){var c=findC(S.selF); if(c) fa.appendChild(createAvatar(c));}}
-  var mam = $('breedMAvatarMobile'); if(mam){mam.innerHTML=''; if(S.selM){var c=findC(S.selM); if(c) mam.appendChild(createAvatar(c));}}
-  var fam = $('breedFAvatarMobile'); if(fam){fam.innerHTML=''; if(S.selF){var c=findC(S.selF); if(c) fam.appendChild(createAvatar(c));}}
+  var updateAvatars = function() {
+    var ma = $('breedMAvatar'); if(ma){ma.innerHTML=''; if(S.selM){var c=findC(S.selM); if(c) ma.appendChild(createAvatar(c));}}
+    var fa = $('breedFAvatar'); if(fa){fa.innerHTML=''; if(S.selF){var c=findC(S.selF); if(c) fa.appendChild(createAvatar(c));}}
+    var mam = $('breedMAvatarMobile'); if(mam){mam.innerHTML=''; if(S.selM){var c=findC(S.selM); if(c) mam.appendChild(createAvatar(c));}}
+    var fam = $('breedFAvatarMobile'); if(fam){fam.innerHTML=''; if(S.selF){var c=findC(S.selF); if(c) fam.appendChild(createAvatar(c));}}
+  };
 
-// 更新中间结果文字
-var info=$('breedInfo');
-var infoMid = $('breedMidInfo');
-if(S.selM&&S.selF){
-  var a=findC(S.selM); var b=findC(S.selF);
-  if(a&&b){
-    if(info) info.textContent = ''; // 清空顶部显示
-
-    // 🌟 计算可能产生的突变
-    var muts = [];
-    var hasA = (a.mut === 'albino' || b.mut === 'albino');
-    var hasM = (a.mut === 'melanor' || b.mut === 'melanor');
-    
-    if (hasA) muts.push('白化');
-    if (hasM) muts.push('黑化');
-    if (hasA || hasM) muts.push('斑点');
-    if (a.firefly || b.firefly) muts.push('萤火虫');
-    if (a.induceHerm || b.induceHerm) muts.push('雌雄同体');
-
-    var mutStr = muts.length > 0 ? ('可能产生：' + muts.join('、')) : '无潜在突变';
-
-   if(infoMid) {
-      // 去掉了预计分数，只留突变提示
-      infoMid.innerHTML = '<div style="color:#f0a04b; font-weight:bold; font-size:12px; line-height:1.4;">'+mutStr+'</div>';
+  var updateMidInfo = function() {
+    var info=$('breedInfo');
+    var infoMid = $('breedMidInfo');
+    updateAvatars();
+    if(S.selM&&S.selF){
+      var a=findC(S.selM); var b=findC(S.selF);
+      if(a&&b){
+        if(info) info.textContent = '';
+        var muts = [];
+        var hasA = (a.mut === 'albino' || b.mut === 'albino');
+        var hasM = (a.mut === 'melanor' || b.mut === 'melanor');
+        if (hasA) muts.push('白化');
+        if (hasM) muts.push('黑化');
+        if (hasA || hasM) muts.push('斑点');
+        if (a.firefly || b.firefly) muts.push('萤火虫');
+        if (a.induceHerm || b.induceHerm) muts.push('雌雄同体');
+        var mutStr = muts.length > 0 ? ('可能产生：' + muts.join('、')) : '无潜在突变';
+       if(infoMid) {
+          infoMid.innerHTML = '<div style="color:#f0a04b; font-weight:bold; font-size:12px; line-height:1.4;">'+mutStr+'</div>';
+        }
+      }
+    }else{
+      if(info) info.textContent='父 '+(S.selM?'✓':'—')+' / 母 '+(S.selF?'✓':'—');
+      if(infoMid) infoMid.innerHTML='<div class="em">请选择父母本</div>';
     }
-  }
-}else{
-  if(info) info.textContent='父 '+(S.selM?'✓':'—')+' / 母 '+(S.selF?'✓':'—');
-  if(infoMid) infoMid.innerHTML='<div class="em">请选择父母本</div>';
-}
-  
-  var ok=S.selM&&S.selF&&S.selM!==S.selF;
-  $('breedGoBtn').disabled=!ok||S.c.length>=S.cap;
-  
-  // 排序按钮与突变下拉框
+    var ok=S.selM&&S.selF&&S.selM!==S.selF;
+    $('breedGoBtn').disabled=!ok||S.c.length>=S.cap;
+  };
+
+  updateMidInfo();
+
   var sb=$('breedSortBtn');
   if(sb){
     sb.textContent=S.breedSort==='high'?'排序：高分优先 ⬆':S.breedSort==='low'?'排序：低分优先 ⬇':S.breedSort==='genHigh'?'排序：高代优先 ⬆':S.breedSort==='genLow'?'排序：低代优先 ⬇':'排序：突变优先';
     sb.onclick=function(){
       var m=S.breedSort||'default';
       S.breedSort=m==='default'?'high':m==='high'?'low':m==='low'?'genHigh':m==='genHigh'?'genLow':'default';
-      mkBreedUI()
+      mkBreedUI();
     }
     
     var tb = sb.parentNode;
@@ -3488,7 +3404,10 @@ if(S.selM&&S.selF){
   }
 }
 function mkBreedItem(c,selId,side,otherId){
-  var d=ce('div');d.className='breed-item'+(selId===c.id?' sel':'');
+  var d=ce('div');
+  d.className='breed-item'+(selId===c.id?' sel':'');
+  d.dataset.id = c.id; // 🌟 存下 ID，方便直接改样式
+  
   var px=ce('div');px.className='bi-px';px.appendChild(mkPB(c));d.appendChild(px);
   var inf=ce('div');inf.className='bi-info';
   var nm=ce('div');nm.className='bi-name';var si=SX[c.sx]||SX.m;
@@ -3499,7 +3418,14 @@ function mkBreedItem(c,selId,side,otherId){
   if(otherId){var o=findC(otherId);if(o){var pr=predRarity(o,c);extra=' · 预计 '+(pr[0]+'-'+pr[1])+' 分'}}
   meta.textContent='魅力值 '+rSFull(c)+'/30 · 剩 '+(getMaxBc(c)-c.bc)+' 次'+extra;
   inf.appendChild(meta);d.appendChild(inf);
-  d.onclick=function(){if(side==='M'){S.selM=(S.selM===c.id?null:c.id)}else{S.selF=(S.selF===c.id?null:c.id)}mkBreedUI()};return d;
+  
+  // 🌟 核心优化：调用闭包函数，不再全量刷新
+  d.onclick=function(){ 
+    if (window._updateBreedSelection) {
+      window._updateBreedSelection(side, c.id);
+    }
+  };
+  return d;
 }
 function doBreedFromPanel(isTest){if(!S.selM||!S.selF||S.selM===S.selF)return;var a=findC(S.selM),b=findC(S.selF);if(!a||!b)return;if(!canBW(a,b))return;S.sel=[S.selM,S.selF];doBreed(isTest);S.selM=null;S.selF=null;render()}
 $('breedGoBtn').onclick=function(){doBreedFromPanel(false)};
@@ -3635,18 +3561,42 @@ function raceHead(){
 }
 
 function editFarmName(){
-  customPrompt("请输入你的马场名字（最多50字符，1个汉字算2字符）：", S.farmName || '我的马场', function(name){
+  customPrompt("请输入你的马场名字（最多50字符，支持中英文及简单符号）：", S.farmName || '我的马场', function(name){
     if(name === null) return;
     name = name.trim();
     if(!name) return alert('名字不能为空！');
+    
+    if(name === S.farmName) return; // 名字没变，直接打断
+    
+    // 🌟 核心：白名单正则校验
+    // 允许：中文(\u4e00-\u9fa5)、英文(a-zA-Z)、数字(0-9)、空格(\s)、下划线(_)、短横线(-)、点(.)、常规中文标点(\u3000-\u303F)
+    var validPattern = /^[\u4e00-\u9fa5a-zA-Z0-9_\-\s.\u3000-\u303F]+$/;
+    if (!validPattern.test(name)) {
+      return alert('⚠️ 包含非法字符！\n名字只能包含中英文、数字、空格，以及简单的标点符号（如下划线、点、短横线等）。\n请勿输入 < > 等特殊符号。');
+    }
+
     var byteLength = 0;
     for (var i = 0; i < name.length; i++) {
       if (name.charCodeAt(i) <= 127) byteLength += 1;
       else byteLength += 2;
     }
     if (byteLength > 50) return alert('名字太长了！最多50个字符。');
+    
     S.farmName = name;
-    sv(); render();
+    
+    // 🌟 同步更新你拥有的所有马的“当前马场名”
+    for(var i=0; i<S.c.length; i++){
+      S.c[i].currentFarmName = name;
+    }
+    for(var j=0; j<S.a.length; j++){
+      if(S.a[j].currentFarmId === S.farmId) {
+        S.a[j].currentFarmName = name;
+      }
+    }
+    
+    sv(); 
+    if($('farmNameBox')) $('farmNameBox').textContent = '🏡 ' + S.farmName;
+    render('list'); 
   });
 }
 function cleanExhaustedHorses(){
@@ -3702,7 +3652,7 @@ function quickSave() {
   if(!confirm('⚡ 确定要极速保存吗？将下载一个存档文件到本地。')) return;
   
   var d = {
-    farmName: S.farmName, c: S.c, a: S.a, d: S.d, r: S.r, p: S.p, st: S.st, stT: S.stT, st00T: S.st00T,
+    farmName: S.farmName, farmId: S.farmId, c: S.c, a: S.a, d: S.d, r: S.r, p: S.p, st: S.st, stT: S.stT, st00T: S.st00T,
     stud: S.stud, studL: S.studL, studT: S.studT, studN: S.studN, ach: S.ach, cap: S.cap, 
     head: S.head, headStart: S.headStart, headRace: S.headRace, headLastTick: S.headLastTick, displayMode: S.displayMode, headTerm: S.headTerm, 
     points: S.points, hoof: S.hoof, trainCount: S.trainCount, hoofSubmitted: S.hoofSubmitted, 

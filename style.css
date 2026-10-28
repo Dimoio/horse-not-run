@@ -1738,3 +1738,87 @@ body > details {
     line-height: 1.4 !important;
   }
 }
+
+/* ========================================== */
+/* 🛡️ 终极 CLS 防跳动补丁：给所有动态渲染区锁定最小高度 */
+/* ========================================== */
+#list {
+  min-height: 400px; /* 马群列表通常很长，预留大一点 */
+}
+#hatch {
+  min-height: 200px;
+}
+#breedM, #breedF {
+  min-height: 300px; /* 繁育左右列表 */
+}
+#arc, #dex, #ach {
+  min-height: 300px; /* 档案、图鉴、成就 */
+}
+.store-main {
+  min-height: 400px; /* 商店区域 */
+}
+
+/* 针对手机端稍微缩小占位，防止底部留白太多 */
+@media (max-width: 768px) {
+  #list { min-height: 300px; }
+  #breedM, #breedF { min-height: 200px; }
+  #arc, #dex, #ach { min-height: 200px; }
+  .store-main { min-height: 300px; }
+}
+
+/* 图片加载防跳动 */
+img {
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: attr(width) / attr(height);
+}
+
+/* ========================================== */
+/* 🛡️ 终极 CLS 防跳动补丁（锁定顶部与内容区高度） */
+/* ========================================== */
+
+/* 1. 锁死顶部状态栏，防止 JS 填字时把下面顶飞 */
+#farmIdBox {
+  min-height: 16px; 
+  line-height: 16px;
+}
+.tb {
+  min-height: 36px; /* 确保按钮和文字加载完毕前，高度固定 */
+}
+#stat {
+  min-height: 18px;
+  display: inline-block;
+}
+
+/* 2. 给所有大模块设定基础占位 */
+body > details {
+  min-height: 80px;
+  /* 魔法属性：告诉浏览器这里的高度是独立的，里面的变化不要影响外面 */
+  contain: layout;
+}
+
+/* 3. 给动态列表区域加大占位（替代之前的数值） */
+#list {
+  min-height: 500px; /* 马群列表通常很长，预留大一点 */
+  contain: layout;
+}
+#hatch {
+  min-height: 200px;
+}
+#breedM, #breedF {
+  min-height: 300px;
+}
+#arc, #dex, #ach {
+  min-height: 300px;
+}
+.store-main {
+  min-height: 400px;
+}
+
+/* 4. 手机端稍微缩小占位，防止底部留白太多 */
+@media (max-width: 768px) {
+  #list { min-height: 350px; }
+  #breedM, #breedF { min-height: 200px; }
+  #arc, #dex, #ach { min-height: 200px; }
+  .store-main { min-height: 300px; }
+}
