@@ -358,6 +358,9 @@ function newC(gen, opt) {
   };
   
   if (opt.store) {
+    // 🌟 核心：商店买来的马，出生地是未知
+    c.birthFarmName = '未知';
+    c.birthFarmId = '未知';
     if (Math.random() >= 0.10) c.g.win = 'none';
   } else {
     c.g.win = 'none';
@@ -368,7 +371,6 @@ function newC(gen, opt) {
   // 🌟 丢进洗刷机
   return fixHorse(c);
 }
-
 function isH(c){return!c.hat||c.hat<=Date.now()}
 function isB(c){return!c.var&&isH(c)}
 function calcHatchTime(c){var charm=rS(c);if(charm<1)charm=1;var mins=charm;if(c.mut==='albino'||c.mut==='melanor'||c.pie){mins=mins*2}return mins*60000}
@@ -1476,11 +1478,19 @@ if(S.c.length - count <= 5) {
       if(c.id === S.head || c.id === S.stud) return false;
       return true;
     });
-    var available = validHorses.sort(function(a,b){
-      var rA = rS(a), rB = rS(b);
-      if (rA !== rB) return rA - rB; 
-      return b.gen - a.gen;
-    });
+   var available = validHorses.sort(function(a,b){
+  // 🌟 1. 优先把有翅膀的往后排（无翅=0，有翅=1）
+  var aHasWing = (a.g.win !== 'none') ? 1 : 0;
+  var bHasWing = (b.g.win !== 'none') ? 1 : 0;
+  if (aHasWing !== bHasWing) return aHasWing - bHasWing;
+
+  // 🌟 2. 魅力值低的往前排（升序）
+  var rA = rS(a), rB = rS(b);
+  if (rA !== rB) return rA - rB; 
+
+  // 🌟 3. 代数高的往前排（保持原样）
+  return b.gen - a.gen;
+});
     
     // 排除已经手动选中的
     available = available.filter(function(c){
@@ -1909,7 +1919,6 @@ function rename(id){
     n = n.trim();
     if(n.length > 25) return alert('名字太长了！最多只能输入 25 个字符。');
     
-    // 同样限制非法字符
     var validPattern = /^[\u4e00-\u9fa5a-zA-Z0-9_\-\s.\u3000-\u303F]*$/;
     if (!validPattern.test(n)) {
       return alert('⚠️ 名字包含非法字符！只能使用中英文、数字和简单标点。');
@@ -1917,7 +1926,9 @@ function rename(id){
 
     c.name = n;
     if(c.name) unlock('named');
-    sv(); closeM(); render('list');
+    sv(); closeM(); 
+    render('list'); 
+    render('breed'); // 🌟 核心：刷新繁育面板里的名字
   });
 }
 function useP(id,t){var c=findC(id);if(!c)return;if(t==='m'){if(S.p.m<=0||c.mut||c.pie)return;S.p.m--;c.mut=pk(MT)}else if(t==='v'){
@@ -2329,7 +2340,19 @@ function render(scope) {
           if (S.defaultHatchGroup === g) opt.selected = true;
           targetSel.appendChild(opt);
         }
-        targetSel.onchange = function() { S.defaultHatchGroup = parseInt(this.value); sv(); };
+        targetSel.onchange = function() { 
+  S.defaultHatchGroup = parseInt(this.value); 
+  
+  // 🌟 核心修复：批量同步更新所有未孵化蛋的去向
+  for(var i=0; i<S.c.length; i++){
+    if(!isH(S.c[i])) {
+      S.c[i].group = S.defaultHatchGroup;
+    }
+  }
+  
+  sv(); 
+  render('list'); // 刷新一下马群列表（虽然蛋还没出来，但数据要同步）
+};
         setDiv.appendChild(targetSel);
         hSet.appendChild(setDiv);
       }
