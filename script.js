@@ -1377,11 +1377,25 @@ function mkStore00UI(){
 
  btnGroup.appendChild(bClear);
  btnGroup.appendChild(bFill);
-var bRefresh = ce('button');
+ // 🌟 核心防呆：检查是否还有选好但没提交的马
+  var hasPendingSelections = false;
+  for(var i=0; i<5; i++) {
+    if(window._hSelected00[i] && !S.hoofSubmitted[i]) {
+      hasPendingSelections = true;
+      break;
+    }
+  }
+
+  var bRefresh = ce('button');
   bRefresh.className = 'test';
   bRefresh.style.cssText = 'padding:4px 10px; font-size:12px; min-height:32px; white-space:nowrap;';
   bRefresh.textContent = '🔄 刷新 (剩' + S.refreshData.s00 + '/5)';
-  if (S.refreshData.s00 <= 0) bRefresh.disabled = true;
+  
+  // 🌟 如果次数用尽，或者槽位里有未提交的马，直接禁用按钮！
+  if (S.refreshData.s00 <= 0 || hasPendingSelections) {
+    bRefresh.disabled = true;
+  }
+  
   bRefresh.onclick = function() { manualRefresh('00'); };
   btnGroup.appendChild(bRefresh);
  toolbar.appendChild(title);
@@ -1658,8 +1672,13 @@ function manualRefresh(type) {
       sv(); render();
       showToast('🛒 月光商店已刷新！');
     }
-  } else if (type === '00') {
+   } else if (type === '00') {
     if (S.refreshData.s00 <= 0) return alert('今日立刻刷新次数已用尽。');
+    
+    // 🌟 加上这句拦截
+    var hasPending = window._hSelected00.some(function(id, i){ return id && !S.hoofSubmitted[i]; });
+    if(hasPending) return alert('槽位中还有未提交的马匹，请先提交或清空后再刷新！');
+    
     if ((S.hoof || 0) < 50) return alert('马蹄铁不足 (需要 50 🧲)');
     if (confirm('⚠️ 确定消耗 50 🧲 立刻刷新缄默商店吗？\n（今日剩余次数：' + S.refreshData.s00 + '/5）')) {
       S.hoof -= 50;
@@ -3094,10 +3113,11 @@ function tick(){
   var clk = $('globalClock');
   if(clk) clk.textContent = '🛒月光:' + sm + ':' + ss + ' | 🌑缄默:' + sm00 + ':' + ss00;
   
-  // 7. 只有在必须刷新时才调用重绘
+   // 7. 只有在必须刷新时才调用重绘
   if(needListRender) {
     render('list');
     render('other');
+    render('hatch'); // 🌟 核心修复：蛋孵化完毕时，必须刷新孵化巢！
   } else if (needTopRender) {
     render('top');
   }
