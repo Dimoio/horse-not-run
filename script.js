@@ -112,7 +112,7 @@ function al(d){
   
   S.farmName = d.farmName || '我的马场';
   S.farmId = d.farmId || genFarmId();
-  S.r = d.r != null ? d.r : 20;
+  S.r = d.r != null ? d.r : 200;
   S.points = d.points || 0;
   S.hoof = d.hoof || 0;
   S.cap = d.cap || 50;
@@ -520,25 +520,49 @@ function breed(a, b) {
   g.wingCol = Math.random() < 0.5 ? a.g.wingCol : b.g.wingCol;
   g.tailCol = Math.random() < 0.5 ? a.g.tailCol : b.g.tailCol;
 
-  // 🌟 4. 一级/二级/三级突变叠加 (保留原机制)
-  var cm=null;
-  if(a.mut==='albino'&&b.mut==='albino'&&Math.random()<0.20)cm='albino';
-  else if(a.mut==='melanor'&&b.mut==='melanor'&&Math.random()<0.20)cm='melanor';
-  else{
-    var src=[];if(a.mut)src.push(a.mut);if(b.mut)src.push(b.mut);
-    if(src.length&&Math.random()<CMI)cm=pk(src)
+ // 🌟 4. 重构优先级：组合突变 > 遗传 > 衰减
+var cm = null;
+var pie = false, pieColor = null;
+
+var isAlbinoMelanor = (a.mut==='albino' && b.mut==='melanor') || (a.mut==='melanor' && b.mut==='albino');
+var isBlackWhitePie = (a.pie && a.pieColor==='w' && b.pie && b.pieColor==='e') || (a.pie && a.pieColor==='e' && b.pie && b.pieColor==='w');
+var hasMut = (a.mut==='albino' || a.mut==='melanor' || b.mut==='albino' || b.mut==='melanor');
+
+// 优先级 1：白（黑）化 x 白（黑）化 = 双亲遗传 (20%)
+if (a.mut==='albino' && b.mut==='albino' && Math.random() < 0.20) {
+  cm = 'albino';
+} else if (a.mut==='melanor' && b.mut==='melanor' && Math.random() < 0.20) {
+  cm = 'melanor';
+}
+// 优先级 2：黑（白）化 x 白（黑）化 = 条纹 (10%)
+else if (isAlbinoMelanor && Math.random() < 0.10) {
+  cm = 'zebra';
+}
+// 优先级 3：衰减为白（黑）斑 (10%)
+else if (hasMut && Math.random() < 0.10) {
+  pie = true;
+  if (a.mut==='albino' && b.mut==='albino') pieColor = 'w';
+  else if (a.mut==='melanor' && b.mut==='melanor') pieColor = 'e';
+  else if (isAlbinoMelanor) pieColor = Math.random() < 0.5 ? 'w' : 'e';
+  else if (a.mut==='albino' || b.mut==='albino') pieColor = 'w';
+  else if (a.mut==='melanor' || b.mut==='melanor') pieColor = 'e';
+  else pieColor = pk(['w','e']);
+}
+// 优先级 4：白（黑）化 x 其它 = 单亲遗传 (5%)
+else {
+  var src = [];
+  if (a.mut==='albino' || a.mut==='melanor') src.push(a.mut);
+  if (b.mut==='albino' || b.mut==='melanor') src.push(b.mut);
+  // 严格限定只有一方有突变时才触发单亲遗传
+  if (src.length === 1 && Math.random() < CMI) {
+    cm = pk(src);
   }
-  
-  var pie=false,pieColor=null;
-  if(!cm&&(a.mut||b.mut)&&Math.random()<0.10){
-    pie=true;
-    if(a.mut==='albino' && b.mut==='albino') { pieColor='w'; }
-    else if(a.mut==='melanor' && b.mut==='melanor') { pieColor='e'; }
-    else if((a.mut==='albino' && b.mut==='melanor') || (a.mut==='melanor' && b.mut==='albino')) { pieColor = Math.random() < 0.5 ? 'w' : 'e'; }
-    else if(a.mut==='albino' || b.mut==='albino') { pieColor='w'; }
-    else if(a.mut==='melanor' || b.mut==='melanor') { pieColor='e'; }
-    else { pieColor=pk(['w','e']); }
-  }
+}
+
+// 优先级 5：黑白斑组合 = 奶牛 (10%)，独立判定
+if (!cm && !pie && isBlackWhitePie && Math.random() < 0.10) {
+  cm = 'cow';
+}
   
   var ff=false;
   if(a.firefly&&b.firefly)ff=Math.random()<0.40;
@@ -690,9 +714,10 @@ function drawHorsePie(ctx, c, lineMask) {
   try {
     var pdata = ctx.getImageData(0, 0, 64, 64);
     var ppx = pdata.data;
-    var sd = 0;
-    for (var si = 0; si < c.id.length; si++) sd += c.id.charCodeAt(si);
-    sd = sd % 1000;
+    var seedStr = c.hid || c.id || '12345';
+   var sd = 0;
+   for (var si = 0; si < seedStr.length; si++) sd += seedStr.charCodeAt(si);
+   sd = sd % 1000;
     var srand = function() { sd = (sd * 9301 + 49297) % 233280; return sd / 233280; };
     
     var isW = (c.pieColor === 'w');
@@ -756,7 +781,132 @@ function drawHorsePie(ctx, c, lineMask) {
     ctx.putImageData(pdata, 0, 0);
   } catch (e) {}
 }
-// ==== 替换结束 ====
+// 🐄 奶牛绘制（黑白面积均衡版）
+function drawHorseCow(ctx, c, lineMask) {
+  try {
+    var pdata = ctx.getImageData(0, 0, 64, 64);
+    var ppx = pdata.data;
+    var seedStr = c.hid || c.id || '12345';
+   var sd = 0;
+   for (var si = 0; si < seedStr.length; si++) sd += seedStr.charCodeAt(si);
+   sd = sd % 1000;
+    var srand = function() { sd = (sd * 9301 + 49297) % 233280; return sd / 233280; };
+    
+    var blobs = [];
+    var numBlobs = 8 + Math.floor(srand() * 4); 
+    for(var b=0; b<numBlobs; b++) {
+      blobs.push({
+        x: 10 + srand() * 44, 
+        y: 10 + srand() * 44,
+        r: 4 + srand() * 4, 
+        phase: srand() * 10,
+        isW: b % 2 === 0 // 🌟 核心：强制黑白斑块数量一致，保证面积均衡
+      });
+    }
+
+    for (var pi = 0; pi < ppx.length; pi += 4) {
+      if (ppx[pi + 3] > 200) {
+        var x = (pi / 4) % 64;
+        var y = Math.floor((pi / 4) / 64);
+        
+        var minDist = 999;
+        var closestBlob = null;
+        for(var k=0; k<blobs.length; k++) {
+          var dx = x - blobs[k].x;
+          var dy = y - blobs[k].y;
+          var dist = Math.sqrt(dx*dx + dy*dy) + Math.sin(dx*0.6 + dy*0.4 + blobs[k].phase) * 1.0;
+          if(dist < minDist) { minDist = dist; closestBlob = blobs[k]; }
+        }
+
+        var paint = false;
+        if (minDist < 5) paint = true;
+        else if (minDist < 8) {
+          if (srand() < (8 - minDist) / 3) paint = true;
+        }
+
+        if (paint && closestBlob) {
+           // 纯黑或纯白
+           var cMain = closestBlob.isW ? [254, 245, 245] : [51, 51, 51];
+           var noiseVal = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+           noiseVal = noiseVal - Math.floor(noiseVal); 
+           var nOff = (noiseVal - 0.5) * 20;
+           
+           ppx[pi] = Math.max(0, Math.min(255, cMain[0] + nOff));
+           ppx[pi+1] = Math.max(0, Math.min(255, cMain[1] + nOff));
+           ppx[pi+2] = Math.max(0, Math.min(255, cMain[2] + nOff));
+        }
+      }
+    }
+    ctx.putImageData(pdata, 0, 0);
+  } catch (e) {}
+}
+// 🦓 终极稳定版细斑马（加宽版）
+function drawHorseStripe(ctx, c, lineMask) {
+  try {
+    function _noise(x, y, seed) {
+      let n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+      return n - Math.floor(n);
+    }
+    
+    function _smoothNoise(x, y, seed) {
+      let ix = Math.floor(x), iy = Math.floor(y);
+      let fx = x - ix, fy = y - iy;
+      let u = fx * fx * (3 - 2 * fx);
+      let v = fy * fy * (3 - 2 * fy);
+      let n00 = _noise(ix, iy, seed);
+      let n10 = _noise(ix + 1, iy, seed);
+      let n01 = _noise(ix, iy + 1, seed);
+      let n11 = _noise(ix + 1, iy + 1, seed);
+      let nx0 = n00 * (1 - u) + n10 * u;
+      let nx1 = n01 * (1 - u) + n11 * u;
+      return nx0 * (1 - v) + nx1 * v;
+    }
+
+    let seedStr = c.hid || c.id || '12345';
+    let seed = 0;
+    for (let i = 0; i < seedStr.length; i++) seed += seedStr.charCodeAt(i);
+    seed = seed % 1000;
+
+    var pdata = ctx.getImageData(0, 0, 64, 64);
+    var ppx = pdata.data;
+    var blackColor = [51, 51, 51];
+    var whiteColor = [254, 245, 245];
+
+    for (var pi = 0; pi < ppx.length; pi += 4) {
+      if (ppx[pi + 3] > 200) {
+        var x = (pi / 4) % 64;
+        var y = Math.floor((pi / 4) / 64);
+        
+        // 脸部与腿部的平滑渐隐
+        let faceFade = Math.max(0, Math.min(1, (x - 20) / 8));
+        let legFade = Math.max(0, Math.min(1, (48 - y) / 8));
+        let fade = Math.min(faceFade, legFade);
+        
+        if (_noise(x, y, seed + 88) > fade) continue;
+
+        let x2 = x * 2;
+        let y2 = y * 2;
+
+        let warpX = _smoothNoise(x2 * 0.04, y2 * 0.04, seed) * 40;
+        let wave = Math.sin((x2 + warpX) * 0.3 + Math.sin(y2 * 0.08 + seed) * 5 + seed);
+        let isFurry = Math.sin(x2 * 1.5 + y2 * 1.5 + seed) > 0.3;
+
+        // 🌟 核心调宽区域：数字越小，条纹越宽！
+        if (wave > 0.4) {
+          ppx[pi] = blackColor[0]; ppx[pi+1] = blackColor[1]; ppx[pi+2] = blackColor[2];
+        } else if (wave > 0.5 && isFurry) {
+          ppx[pi] = blackColor[0]; ppx[pi+1] = blackColor[1]; ppx[pi+2] = blackColor[2];
+        }
+        else if (wave < -0.3) {
+          ppx[pi] = whiteColor[0]; ppx[pi+1] = whiteColor[1]; ppx[pi+2] = whiteColor[2];
+        } else if (wave < -0.5 && isFurry) {
+          ppx[pi] = whiteColor[0]; ppx[pi+1] = whiteColor[1]; ppx[pi+2] = whiteColor[2];
+        }
+      }
+    }
+    ctx.putImageData(pdata, 0, 0);
+  } catch (e) { console.error("斑马渲染报错：", e); }
+}
 
 // 🌟 1. 绘制成年马的各个部件
 function drawHorseParts(ctx, c, colors) {
@@ -867,11 +1017,12 @@ function mkPB(c) {
   var colors = getHorseColors(c);
   var srand = null;
   if (c.firefly) {
-    var ssd = 0;
-    for (var ssi = 0; ssi < c.id.length; ssi++) ssd += c.id.charCodeAt(ssi);
-    ssd = ssd % 1000;
-    srand = function () { ssd = (ssd * 9301 + 49297) % 233280; return ssd / 233280; };
-  }
+  var seedStr = c.hid || c.id || '12345';
+  var ssd = 0;
+  for (var ssi = 0; ssi < seedStr.length; ssi++) ssd += seedStr.charCodeAt(ssi);
+  ssd = ssd % 1000;
+  srand = function () { ssd = (ssd * 9301 + 49297) % 233280; return ssd / 233280; };
+}
 
   if (isH(c) && _assetsReady && !_hasLoadError) {
     drawHorseParts(offCtx, c, colors);
@@ -910,7 +1061,9 @@ function mkPB(c) {
     }
     lctx.putImageData(ldata, 0, 0);
 
-    if (c.pie) drawHorsePie(offCtx, c, lineMask);
+      if (c.mut === 'cow') drawHorseCow(offCtx, c, lineMask);
+    else if (c.mut === 'zebra') drawHorseStripe(offCtx, c, lineMask);
+    else if (c.pie) drawHorsePie(offCtx, c, lineMask);
     offCtx.drawImage(lCanvas, 0, 0);
 
     drawHorseEye(offCtx, c);
@@ -1064,7 +1217,7 @@ var S = {
   selF: null,
   last: null,
   lastM: [],
-  r: 20,
+  r: 200,
   p: { m: 0, v: 0, i: 0, fire: 0, dispel: 0, hfan: 0, hfeng: 0, hmix: 0, hdrag: 0, hnight: 0 },
   points: 0,
   hoof: 0,
@@ -1820,7 +1973,10 @@ var buildGeneHtml = function(c){
   var si=SX[c.sx]||SX.m;
   var isEgg=!isH(c);
   var muts=[];
-if(c.mut)muts.push(c.mut==='albino'?'白化':'黑化');
+ if(c.mut === 'albino') muts.push('白化');
+  else if(c.mut === 'melanor') muts.push('黑化');
+  else if(c.mut === 'cow') muts.push('奶牛');
+  else if(c.mut === 'zebra') muts.push('条纹');
 if(c.pie)muts.push(c.pieColor==='w'?'白斑':'黑斑');
 if(c.firefly)muts.push('<span style="color:var(--gold)">萤火虫</span>');
 if(c.sterile)muts.push('<span style="color:var(--sterile)">不育</span>');
@@ -2533,7 +2689,10 @@ cd.appendChild(nameRow);
         if(type==='mut-red') { span.style.borderColor='var(--danger-bd)'; span.style.color='var(--danger-fg)'; }
         bottom.appendChild(span);
       };
-      if(c.mut) addTag(c.mut==='albino'?'白化':'黑化', 'mut');
+        if(c.mut === 'albino') addTag('白化', 'mut');
+      else if(c.mut === 'melanor') addTag('黑化', 'mut');
+      else if(c.mut === 'cow') addTag('奶牛', 'mut');
+      else if(c.mut === 'zebra') addTag('条纹', 'mut');
       if(c.pie) addTag(c.pieColor==='w'?'白斑':'黑斑', 'mut');
       if(c.firefly) addTag('萤火虫', 'mut');
       if(c.sterile) addTag('不育', 'mut-red');
@@ -2550,8 +2709,14 @@ cd.appendChild(nameRow);
       // 【色块模式】
       var mutCol=ce('div');mutCol.className='mut-col';
       var b1=ce('div');b1.className='mut-box'+(c.mut||c.pie?'':' empty');
-      if(c.mut==='albino') b1.style.background='#fff'; else if(c.mut==='melanor') b1.style.background='#111'; else if(c.pie && c.pieColor==='w') b1.style.background='#ddd'; else if(c.pie && c.pieColor==='e') b1.style.background='#333';
-      b1.title=c.mut==='albino'?'一级：白化':c.mut==='melanor'?'一级：黑化':c.pie&&c.pieColor==='w'?'一级：白斑':c.pie&&c.pieColor==='e'?'一级：黑斑':'一级：无'; 
+        if(c.mut==='albino') b1.style.background='#fff';
+      else if(c.mut==='melanor') b1.style.background='#111';
+      else if(c.mut==='cow') b1.style.background='linear-gradient(45deg, #111 50%, #fff 50%)';
+      else if(c.mut==='zebra') b1.style.background='repeating-linear-gradient(45deg, #111, #111 2px, #fff 2px, #fff 4px)';
+      else if(c.pie && c.pieColor==='w') b1.style.background='#ddd';
+      else if(c.pie && c.pieColor==='e') b1.style.background='#333';
+      
+      b1.title=c.mut==='albino'?'一级：白化':c.mut==='melanor'?'一级：黑化':c.mut==='cow'?'一级：奶牛':c.mut==='zebra'?'一级：条纹':c.pie&&c.pieColor==='w'?'一级：白斑':c.pie&&c.pieColor==='e'?'一级：黑斑':'一级：无'; 
       mutCol.appendChild(b1);
       
       var b2=ce('div');b2.className='mut-box'+(c.firefly?'':' empty');
@@ -3218,7 +3383,7 @@ S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
   S.sel = [];
   S.last = null;
   S.lastM = [];
-  S.r = 20;
+  S.r = 200;
   S.points = 0;
   S.hoof = 0;
   S.trainCount = 1;
@@ -3277,21 +3442,22 @@ function breedPool(side){
       if(!has) return false;
     }
     
-    // 突变筛选（包含性别豁免）
-    if(S.breedSort === 'default' && S.breedMutFilter) {
-      var bypass = false;
-      if(S.breedMutFilter === 'doubleWomb' && side === 'M' && c.sx === 'm') bypass = true;
-      if(S.breedMutFilter === 'sterile' && side === 'F' && c.sx === 'f') bypass = true;
-      if(!bypass) {
-        if(S.breedMutFilter === 'albino' && c.mut !== 'albino') return false;
-        if(S.breedMutFilter === 'melanor' && c.mut !== 'melanor') return false;
-        if(S.breedMutFilter === 'pie' && !c.pie) return false;
-        if(S.breedMutFilter === 'firefly' && !c.firefly) return false;
-        if(S.breedMutFilter === 'sterile' && !c.sterile) return false;
-        if(S.breedMutFilter === 'doubleWomb' && !c.doubleWomb) return false;
-      }
-    }
-    
+    // 突变筛选（全量生效）
+if(S.breedMutFilter) {
+  var bypass = false;
+  if(S.breedMutFilter === 'doubleWomb' && side === 'M' && c.sx === 'm') bypass = true;
+  if(S.breedMutFilter === 'sterile' && side === 'F' && c.sx === 'f') bypass = true;
+  if(!bypass) {
+    if(S.breedMutFilter === 'albino' && c.mut !== 'albino') return false;
+    if(S.breedMutFilter === 'melanor' && c.mut !== 'melanor') return false;
+    if(S.breedMutFilter === 'cow' && c.mut !== 'cow') return false;       // 🌟 新增奶牛
+    if(S.breedMutFilter === 'zebra' && c.mut !== 'zebra') return false;   // 🌟 新增条纹
+    if(S.breedMutFilter === 'pie' && !c.pie) return false;
+    if(S.breedMutFilter === 'firefly' && !c.firefly) return false;
+    if(S.breedMutFilter === 'sterile' && !c.sterile) return false;
+    if(S.breedMutFilter === 'doubleWomb' && !c.doubleWomb) return false;
+  }
+}
     if(q){
       var nm=(c.name||'').toLowerCase();
       var gn=String(c.gen);
@@ -3402,7 +3568,7 @@ function mkBreedUI(){
     var pxb = mkPB(c);
     pxb.style.width = '100px'; pxb.style.height = '100px'; pxb.style.paddingTop = '0';
     div.appendChild(pxb);
-    var nm = ce('div');
+    var nm = ce('div'); 
     nm.style.cssText = 'font-size:11px; color:#ffd; margin-top:4px;';
     nm.textContent = (c.name ? '「'+c.name+'」' : '') + '第'+c.gen+'代';
     div.appendChild(nm);
@@ -3449,38 +3615,38 @@ function mkBreedUI(){
 
   var sb=$('breedSortBtn');
   if(sb){
-    sb.textContent=S.breedSort==='high'?'排序：高分优先 ⬆':S.breedSort==='low'?'排序：低分优先 ⬇':S.breedSort==='genHigh'?'排序：高代优先 ⬆':S.breedSort==='genLow'?'排序：低代优先 ⬇':'排序：突变优先';
-    sb.onclick=function(){
-      var m=S.breedSort||'default';
-      S.breedSort=m==='default'?'high':m==='high'?'low':m==='low'?'genHigh':m==='genHigh'?'genLow':'default';
-      mkBreedUI();
-    }
-    
-    var tb = sb.parentNode;
-    var sel = document.getElementById('breedMutFilter');
-    if(S.breedSort === 'default') {
-      if(!sel) {
-        sel = ce('select');
-        sel.id = 'breedMutFilter';
-        sel.className = 'breed-search';
-        sel.style.cssText = 'flex:1; background:var(--input-bg); color:var(--input-fg); border:1px solid var(--input-bd); border-radius:4px; font-size:12px; min-height:32px; outline:none; padding:0 8px; margin-bottom:0;';
-        sel.innerHTML = '<option value="">全部突变</option><option value="albino">白化</option><option value="melanor">黑化</option><option value="pie">斑点</option><option value="firefly">萤火虫</option><option value="sterile">不育</option><option value="doubleWomb">双子宫</option>';
-        sel.value = S.breedMutFilter || '';
-        sel.onchange = function(){ S.breedMutFilter = this.value; mkBreedUI(); };
-        tb.appendChild(sel);
-      } else {
-        sel.style.display = 'block';
-        sel.value = S.breedMutFilter || ''; 
-      }
-    } else {
-      if(sel) sel.style.display = 'none';
-    }
+   var sb=$('breedSortBtn');
+if(sb){
+  sb.textContent=S.breedSort==='high'?'排序：高分优先 ⬆':S.breedSort==='low'?'排序：低分优先 ⬇':S.breedSort==='genHigh'?'排序：高代优先 ⬆':S.breedSort==='genLow'?'排序：低代优先 ⬇':'排序：突变优先';
+  sb.onclick=function(){
+    var m=S.breedSort||'default';
+    S.breedSort=m==='default'?'high':m==='high'?'low':m==='low'?'genHigh':m==='genHigh'?'genLow':'default';
+    mkBreedUI();
+  }
+  
+  // 🌟 核心优化：永久显示突变筛选框，无论当前是什么排序
+  var tb = sb.parentNode;
+  var sel = document.getElementById('breedMutFilter');
+  if(!sel) {
+    sel = ce('select');
+    sel.id = 'breedMutFilter';
+    sel.className = 'breed-search';
+    sel.style.cssText = 'flex:1; background:var(--input-bg); color:var(--input-fg); border:1px solid var(--input-bd); border-radius:4px; font-size:12px; min-height:32px; outline:none; padding:0 8px; margin-bottom:0;';
+    // 🌟 这里也同步加上奶牛和条纹
+    sel.innerHTML = '<option value="">全部突变</option><option value="albino">白化</option><option value="melanor">黑化</option><option value="cow">奶牛</option><option value="zebra">条纹</option><option value="pie">斑点</option><option value="firefly">萤火虫</option><option value="sterile">不育</option><option value="doubleWomb">双子宫</option>';
+    sel.value = S.breedMutFilter || '';
+    sel.onchange = function(){ S.breedMutFilter = this.value; mkBreedUI(); };
+    tb.appendChild(sel);
+  } else {
+    sel.value = S.breedMutFilter || ''; 
+  }
+}
   }
 }
 function mkBreedItem(c,selId,side,otherId){
   var d=ce('div');
   d.className='breed-item'+(selId===c.id?' sel':'');
-  d.dataset.id = c.id; // 🌟 存下 ID，方便直接改样式
+  d.dataset.id = c.id; 
   
   var px=ce('div');px.className='bi-px';px.appendChild(mkPB(c));d.appendChild(px);
   var inf=ce('div');inf.className='bi-info';
@@ -3488,12 +3654,12 @@ function mkBreedItem(c,selId,side,otherId){
   nm.textContent=(c.name?'「'+c.name+'」· 第'+c.gen+'代':'第 '+c.gen+' 代')+' '+si.s;
   inf.appendChild(nm);
   var meta=ce('div');meta.className='bi-meta';
-  var extra='';
-  if(otherId){var o=findC(otherId);if(o){var pr=predRarity(o,c);extra=' · 预计 '+(pr[0]+'-'+pr[1])+' 分'}}
-  meta.textContent='魅力值 '+rSFull(c)+'/30 · 剩 '+(getMaxBc(c)-c.bc)+' 次'+extra;
+  
+  // 🌟 删除了导致报错的 extra 和 predRarity
+  meta.textContent='魅力值 '+rSFull(c)+'/30 · 剩 '+(getMaxBc(c)-c.bc)+' 次';
+  
   inf.appendChild(meta);d.appendChild(inf);
   
-  // 🌟 核心优化：调用闭包函数，不再全量刷新
   d.onclick=function(){ 
     if (window._updateBreedSelection) {
       window._updateBreedSelection(side, c.id);
