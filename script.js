@@ -3186,17 +3186,25 @@ function tick(){
   for(var i=0;i<S.c.length;i++){
     if(!isH(S.c[i])) { hasEggs = true; break; }
   }
-  if(hasEggs){
+if(hasEggs){
     for(var i=0;i<S.c.length;i++){
       var c=S.c[i];
-      if(isH(c)) continue;
-      // 只有在页面确实存在蛋的时候才去查 DOM
       var el=document.querySelector('.st[data-cid="'+c.id+'"]');
       if(el){
-        var st=stTx(c);
-        if(el.textContent!==st.text){
-          el.textContent=st.text;
-          el.className='st '+st.cls;
+        if(!isH(c)){
+          // 还没孵化，正常更新倒计时
+          var st=stTx(c);
+          if(el.textContent!==st.text){
+            el.textContent=st.text;
+            el.className='st '+st.cls;
+          }
+        } else {
+          // 🌟 核心修复：时间一到，直接让这个蛋的卡片在视觉上瞬间消失
+          // 不等全局重绘，彻底杜绝卡 1s 的视觉残留
+          var parentCard = el.parentNode;
+          if (parentCard && parentCard.classList.contains('card')) {
+            parentCard.style.display = 'none'; 
+          }
         }
       }
     }
@@ -3482,19 +3490,13 @@ if(S.breedMutFilter) {
     arr.sort(function(a,b){return a.gen-b.gen});
     return arr
   }
-  var scoreFn=function(c){return rSFull(c)};
-  if(other){
-    var o=findC(other);
-    if(o){
-      scoreFn=function(c){
-        var pr=predRarity(o,c);
-        return(pr[0]+pr[1])/2
-      }
-    }
-  }
-  var scored=arr.map(function(c){return{c:c,s:scoreFn(c)}});
-  scored.sort(function(a,b){return sortMode==='high'?b.s-a.s:a.s-b.s});
-  return scored.map(function(x){return x.c})
+    // 🌟 彻底修复报错：移除 predRarity 调用，高分/低分统一按魅力值排
+  arr.sort(function(a,b){
+    var scoreA = rSFull(a);
+    var scoreB = rSFull(b);
+    return sortMode==='high' ? scoreB - scoreA : scoreA - scoreB;
+  });
+  return arr;
 }
 function mkBreedUI(){
   if(!$('breedM'))return;
