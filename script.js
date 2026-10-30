@@ -1995,7 +1995,29 @@ if(c.currentFarmId) {
     idLine += '<div style="font-size:11px; color:var(--page-muted); margin-bottom:8px; word-break:break-all; line-height:1.4;">🏡 马场: '+(c.currentFarmName||'未知')+' ('+c.currentFarmId+')</div>';
   }
 }
-var h='<div class="mdt">'+(c.isLocked ? '🔒 ' : '')+(c.name?'「'+c.name+'」':'')+'第 '+c.gen+' 代 · '+si.s+' '+si.n+'</div>'+idLine+'<div style="font-size:11px;color:var(--page-dim);margin-bottom:8px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>';
+  // 🌟 计算当前繁育状态的显示文案
+  var bcStr = '';
+  if (isEgg) {
+    bcStr = '<span style="color:var(--st-hatch)">孵化中（尚不可繁育）</span>';
+  } else if (c.var) {
+    bcStr = '<span style="color:var(--st-used)">变异体（不可繁育）</span>';
+  } else if (c.sterile && !c.tempBreed) {
+    bcStr = '<span style="color:var(--st-used)">不育（不可繁育）</span>';
+  } else if (c.tempBreed) {
+    bcStr = '<span style="color:var(--st-ready)">临时繁育 1/1</span>';
+  } else {
+    var remBc = getMaxBc(c) - c.bc;
+    var maxBc = getMaxBc(c);
+    // 如果还有次数显示绿色，没了显示红色
+    var bcColor = remBc > 0 ? 'var(--st-ready)' : 'var(--st-used)';
+    bcStr = '<span style="color:'+bcColor+'">剩余繁育：' + remBc + ' / ' + maxBc + '</span>';
+  }
+
+  // 拼接到详情页的头部信息里（加粗、加底色框）
+  var h='<div class="mdt">'+(c.isLocked ? '🔒 ' : '')+(c.name?'「'+c.name+'」':'')+'第 '+c.gen+' 代 · '+si.s+' '+si.n+'</div>'
+    + idLine 
+    + '<div style="font-size:11px;color:var(--page-dim);margin-bottom:6px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>'
+    + '<div style="font-size:13px; font-weight:bold; margin-bottom:12px; background:var(--inner-bg); padding:4px 8px; border-radius:4px; display:inline-block;">'+bcStr+'</div>';
   h += buildGeneHtml(c);
   
   h += '<div class="ma">';
@@ -3186,7 +3208,7 @@ function tick(){
   for(var i=0;i<S.c.length;i++){
     if(!isH(S.c[i])) { hasEggs = true; break; }
   }
-if(hasEggs){
+   if(hasEggs){
     for(var i=0;i<S.c.length;i++){
       var c=S.c[i];
       var el=document.querySelector('.st[data-cid="'+c.id+'"]');
@@ -3199,8 +3221,7 @@ if(hasEggs){
             el.className='st '+st.cls;
           }
         } else {
-          // 🌟 核心修复：时间一到，直接让这个蛋的卡片在视觉上瞬间消失
-          // 不等全局重绘，彻底杜绝卡 1s 的视觉残留
+          // 🌟 核心修复：时间一到，直接让这个蛋的卡片在视觉上消失
           var parentCard = el.parentNode;
           if (parentCard && parentCard.classList.contains('card')) {
             parentCard.style.display = 'none'; 
