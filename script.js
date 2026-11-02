@@ -30,6 +30,8 @@ function getSaveData() {
     headLastTick: S.headLastTick, 
     headTerm: S.headTerm, 
     points: S.points, 
+    crystal: S.crystal, // 🌟 新增水晶币
+    guide: S.guide,     // 🌟 新增引导状态
     hoof: S.hoof, 
     trainCount: S.trainCount, 
     hoofSubmitted: S.hoofSubmitted, 
@@ -40,7 +42,14 @@ function getSaveData() {
     displayMode: S.displayMode, 
     themeMode: S.themeMode, 
     lastRescue: S.lastRescue, 
-    refreshData: S.refreshData
+    refreshData: S.refreshData,
+    raffleColor: S.raffleColor,
+   raffleWeek: S.raffleWeek,
+raffleUsedCount: S.raffleUsedCount,
+dailyTasks: S.dailyTasks,
+dailyTaskResetTime: S.dailyTaskResetTime,
+lastDailyRefreshDate: S.lastDailyRefreshDate,
+raffleLastDate: S.raffleLastDate,
   };
 }
 function sv(){
@@ -64,6 +73,7 @@ function fixHorse(c, existingHids) {
   
   // 补全基础属性
   if (c.name === undefined) c.name = '';
+  if (c.bio === undefined) c.bio = ''; 
   if (c.hasBeenStud === undefined) c.hasBeenStud = false;
   if (c.trainSpeed === undefined) c.trainSpeed = 0;
   if (c.trained === undefined) c.trained = false;
@@ -105,6 +115,12 @@ function fixHorse(c, existingHids) {
   if (!CL[c.g.wingCol]) c.g.wingCol = pk(CK);
   if (!CL[c.g.tailCol]) c.g.tailCol = pk(CK);
   
+   // 🌟 核心：初始化近交系数（只有数字，极省空间）
+  if (c.inbCoeff === undefined) {
+    // 老存档第一次加载时，计算一次作为基础值
+    var tempInb = calcInbreeding(c);
+    c.inbCoeff = parseFloat(tempInb.coeff) || 0;
+  }
   return c;
 }
 function al(d){
@@ -114,6 +130,13 @@ function al(d){
   S.farmId = d.farmId || genFarmId();
   S.r = d.r != null ? d.r : 200;
   S.points = d.points || 0;
+   S.crystal = d.crystal || 0; // 🌟 读取水晶币
+  // 🌟 初始化引导状态
+  S.guide = d.guide || { 
+    started: false, 
+    completed: false, 
+    tasks: {} 
+  };
   S.hoof = d.hoof || 0;
   S.cap = d.cap || 50;
   S.defaultHatchGroup = d.defaultHatchGroup !== undefined ? d.defaultHatchGroup : -1;
@@ -159,6 +182,14 @@ function al(d){
   S.themeMode = d.themeMode || 'dark';
   S.lastRescue = d.lastRescue || 0;
   S.refreshData = d.refreshData || { date: '', s01: 5, s00: 5 };
+  
+  S.raffleColor = d.raffleColor || null;
+S.raffleWeek = d.raffleWeek || 0;
+S.raffleUsedCount = d.raffleUsedCount || 0;
+S.dailyTasks = d.dailyTasks || null;
+S.dailyTaskResetTime = d.dailyTaskResetTime || 0;
+S.lastDailyRefreshDate = d.lastDailyRefreshDate || '';
+ S.raffleLastDate = d.raffleLastDate || '';
   
   S.c = d.c || [];
   S.a = d.a || [];
@@ -600,7 +631,11 @@ if (!cm && !pie && isBlackWhitePie && Math.random() < 0.10) {
   // 🌟 丢进洗刷机
   c = fixHorse(c);
   c.group = (typeof S.defaultHatchGroup === 'number' && S.defaultHatchGroup < S.groups.length) ? S.defaultHatchGroup : -1;
-  
+ // 🌟 核心：子代近交系数 = 父亲历史近交次数 + 母亲历史近交次数 + 本次结合新增的重合次数
+var tempOverlap = calcInbreeding({ par: [a.id, b.id] });
+var currentDelta = tempOverlap.currentOverlap || 0;
+
+c.inbCoeff = (a.inbCoeff || 0) + (b.inbCoeff || 0) + currentDelta;
   return{c:c,mus:mus,a:a,b:b};
 }
 function predRarity(a,b){var rk=RK.concat(['col']);var lo=0,hi=0;for(var i=0;i<rk.length;i++){var k=rk[i];if(k==='col')continue;var o1=fo(k,a.g[k]),o2=fo(k,b.g[k]);var w1=o1.t==='e'?5:o1.t==='r'?2:0;var w2=o2.t==='e'?5:o2.t==='r'?2:0;lo+=Math.min(w1,w2);hi+=Math.max(w1,w2)}return[lo,hi]}
@@ -660,8 +695,10 @@ function loadAllParts() {
     }
   }
   tasks.push('01_sp');
+   tasks.push('raffle_horse');
+  tasks.push('raffle_eye');
   tasks.push('00_sp');
-
+ 
   _partTotal = tasks.length;
   _partReady = 0;
   _assetsReady = false;
@@ -1107,6 +1144,362 @@ function mkPB(c) {
   b.appendChild(cv);
   return b;
 }
+// ==========================================
+// 🎲 抽奖种马系统（嵌入现有种马面板）
+// ==========================================
+var RAFFLE_STUDS = [
+  {
+    id: 'raffle_01', name: '『龙之眼 I』', gen: 0, sx: 'm',
+    g: { col: 'night_dark', wingCol: 'night_dark', tailCol: 'night_dark', win: 'drag', leg: 'drag', bod: 'scale', hor: 'drag', tai: 'drag', eye: 'drag' },
+    mut: null, var: null, specialTrait: 'Dragon_Eye_I_Raffle' // 🌟 改成了这个
+  }
+];
+function mkRaffleHorsePB() {
+  var b = ce('div'); b.className = 'pxb';
+  var cv = ce('canvas'); cv.width = 128; cv.height = 128;
+  var ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = false;
+  
+  var bodyImg = _parts['raffle_horse'], eyeImg = _parts['raffle_eye'];
+  var colorKey = S.raffleColor;
+  if (!colorKey || colorKey === 'special_albino' || colorKey === 'special_melanor') colorKey = 'grey_std'; 
+
+  if (bodyImg) {
+  // 🌟 核心升级：反向倾斜 5 度的渐变椭圆阴影
+ctx.save(); // 保存当前画布状态
+
+// 1. 移动到阴影中心点（根据你的马稍微调整 x 和 y）
+ctx.translate(64, 112); 
+
+// 2. 反向旋转 5 度 (-5 * Math.PI / 180)
+ctx.rotate(-Math.PI / 36); 
+
+// 3. 纵向压扁（Y轴压缩到 0.2 倍），这样画出来的圆就会变成扁扁的椭圆
+ctx.scale(1, 0.2); 
+
+// 4. 创建径向渐变 (从一个点向外扩散)
+var shadowGrd = ctx.createRadialGradient(0, 0, 0, 0, 0, 55);
+shadowGrd.addColorStop(0, 'rgba(0,0,0,0.35)');   // 中心最深
+shadowGrd.addColorStop(0.5, 'rgba(0,0,0,0.15)'); // 中间过渡
+shadowGrd.addColorStop(1, 'rgba(0,0,0,0)');      // 边缘完全透明
+
+ctx.fillStyle = shadowGrd;
+ctx.beginPath();
+ctx.arc(0, 0, 55, 0, Math.PI * 2); // 画一个半径 55 的圆
+ctx.fill();
+
+ctx.restore(); // 恢复画布状态，不影响后面画马
+
+    // ==========================================
+    // 🌟 图片已加载：执行完美的三阶染色
+    // ==========================================
+    var offCv = ce('canvas'); offCv.width = 128; offCv.height = 128;
+    var offCtx = offCv.getContext('2d', { willReadFrequently: true });
+    offCtx.imageSmoothingEnabled = false;
+
+    offCtx.drawImage(bodyImg, 0, 0, 128, 128);
+    var imgData = offCtx.getImageData(0, 0, 128, 128);
+    var px = imgData.data;
+    
+    var trio = CL[colorKey] || CL.grey_std;
+    function hex2rgb(hex) {
+      hex = hex.replace('#', '');
+      return [parseInt(hex.substr(0, 2), 16), parseInt(hex.substr(2, 2), 16), parseInt(hex.substr(4, 2), 16)];
+    }
+    var cDark = hex2rgb(trio[2]);  
+    var cMain = hex2rgb(trio[1]);  
+    var cLight = hex2rgb(trio[3]); 
+
+    var minL = 1, maxL = 0;
+    for (var i = 0; i < px.length; i += 4) {
+      if (px[i + 3] === 0) continue;
+      var lum0 = (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255;
+      if (lum0 < minL) minL = lum0;
+      if (lum0 > maxL) maxL = lum0;
+    }
+    if (maxL - minL < 0.05) maxL = minL + 0.05;
+
+    for (var i = 0; i < px.length; i += 4) {
+      if (px[i + 3] === 0) continue; 
+      
+      var r = px[i], g = px[i + 1], blue = px[i + 2];
+      var lum = (r * 0.3 + g * 0.59 + blue * 0.11) / 255;
+      
+      if (lum < 0.15) continue; 
+
+      var t = (lum - minL) / (maxL - minL);
+      t = Math.max(0, Math.min(1, t));
+      
+      var tContrast = t * t * (3 - 2 * t); 
+      tContrast = Math.pow(tContrast, 1.2); 
+
+      var finalColor;
+      if (tContrast < 0.45) {
+        var ratio = tContrast / 0.45;
+        finalColor = [
+          cDark[0] + (cMain[0] - cDark[0]) * ratio,
+          cDark[1] + (cMain[1] - cDark[1]) * ratio,
+          cDark[2] + (cMain[2] - cDark[2]) * ratio
+        ];
+      } else {
+        var ratio = (tContrast - 0.45) / 0.55;
+        finalColor = [
+          cMain[0] + (cLight[0] - cMain[0]) * ratio,
+          cMain[1] + (cLight[1] - cMain[1]) * ratio,
+          cMain[2] + (cLight[2] - cMain[2]) * ratio
+        ];
+      }
+      
+      px[i] = finalColor[0];
+      px[i + 1] = finalColor[1];
+      px[i + 2] = finalColor[2];
+    }
+    
+    offCtx.putImageData(imgData, 0, 0);
+    ctx.drawImage(offCv, 0, 0);
+    
+    if (eyeImg) {
+      ctx.drawImage(eyeImg, 0, 0, 128, 128);
+    }
+  } else {
+    // ==========================================
+    // 🥚 图片未加载：显示带专属颜色的蛋
+    // ==========================================
+    // 蛋的渲染代码保持不变
+    var W = 64;
+    var eggCanvas = ce('canvas');
+    eggCanvas.width = W; eggCanvas.height = W;
+    var octx = eggCanvas.getContext('2d', { willReadFrequently: true });
+
+    var fakeHorse = { g: { col: colorKey, wingCol: colorKey, tailCol: colorKey }, mut: null };
+    var p = getPal(fakeHorse);
+    drEgg(octx, p);
+
+    var d = octx.getImageData(0, 0, W, W).data;
+    var finalEgg = ce('canvas');
+    finalEgg.width = W; finalEgg.height = W;
+    var fctx = finalEgg.getContext('2d');
+    fctx.imageSmoothingEnabled = false;
+
+    fctx.fillStyle = '#0a0812';
+    for (var yy = 0; yy < W; yy++) {
+      for (var xx = 0; xx < W; xx++) {
+        if (d[(yy * W + xx) * 4 + 3] > 0) continue;
+        if ((xx > 0 && d[(yy * W + xx - 1) * 4 + 3] > 0) ||
+            (xx < W - 1 && d[(yy * W + xx + 1) * 4 + 3] > 0) ||
+            (yy > 0 && d[((yy - 1) * W + xx) * 4 + 3] > 0) ||
+            (yy < W - 1 && d[((yy + 1) * W + xx) * 4 + 3] > 0)) {
+          fctx.fillRect(xx, yy, 1, 1);
+        }
+      }
+    }
+    fctx.drawImage(eggCanvas, 0, 0);
+    ctx.drawImage(finalEgg, 0, 0, 128, 128);
+  }
+  b.appendChild(cv); return b;
+}
+function renderRaffleFemaleList() {
+  var box = $('raffleFList'); 
+  if (!box) return; 
+  box.innerHTML = '';
+  
+  var q = $('raffleFSearch') ? $('raffleFSearch').value.trim().toLowerCase() : '';
+  
+  var validFemales = S.c.filter(function(c) { 
+    if (c.sx !== 'f' || !isH(c) || c.var || c.sterile) return false;
+    if (q) {
+      var nm = (c.name || '').toLowerCase(), gn = String(c.gen);
+      if (nm.indexOf(q) < 0 && gn.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+
+  // 🌟 核心新增：按魅力值从大到小排序
+  validFemales.sort(function(a, b) {
+    return rSFull(b) - rSFull(a);
+  });
+
+  for (var i = 0; i < validFemales.length; i++) {
+    (function(f) {
+      var item = ce('div'); item.className = 'breed-item';
+      item.style.cssText = 'margin-bottom:6px; display:flex; align-items:center; border:1px solid var(--card-bd); padding:6px; cursor:pointer;';
+      
+      var px = ce('div'); px.className = 'bi-px'; px.appendChild(mkPB(f)); item.appendChild(px);
+      
+      var inf = ce('div'); inf.className = 'bi-info';
+      inf.innerHTML = '<div class="bi-name">第' + f.gen + '代 ' + (f.name || '未命名') + '</div>' +
+                      '<div class="bi-meta">魅力: ' + rSFull(f) + '</div>';
+      item.appendChild(inf);
+      
+      item.onclick = function() {
+        if (confirm('确定花费 5 💎 让「' + (f.name || '第' + f.gen + '代') + '」与「' + window._currentStudData.name + '」交配吗？')) {
+          executeRaffleBreed(f, window._currentStudData);
+        }
+      };
+      box.appendChild(item);
+    })(validFemales[i]);
+  }
+  if (validFemales.length === 0) box.innerHTML = '<div class="em" style="padding:10px; text-align:center;">没有符合条件的母马</div>';
+}
+
+function executeRaffleBreed(female, studData) {
+  var todayStr = new Date().toDateString();
+  if (S.crystal < 5) return alert('水晶币不足！');
+  if (S.raffleLastDate === todayStr) return alert('今天已经交配过了，请明天再来！');
+  if (S.raffleUsedCount >= 7) return alert('本周次数已用尽！');
+  
+  // 赋予该存档专属的三同色
+  var male = fixHorse(Object.assign({}, studData, {
+    hat: 0, isLocked: true, hid: 'RAFFLE_' + getWeekNumber() + '_' + uid(), bc: 0, cd: 0,
+    g: Object.assign({}, studData.g, { col: S.raffleColor, wingCol: S.raffleColor, tailCol: S.raffleColor })
+  }));
+  
+  var r = breed(male, female);
+  var child = r.c;
+  if (studData.specialTrait) child.specialT = studData.specialTrait;
+  
+  S.c.push(child);
+  mkDex(child);
+  S.crystal -= 5;
+  S.raffleUsedCount++;
+  S.raffleLastDate = todayStr;
+  
+  completeGuideTask('g4'); updateDailyTaskProgress('breed', 1);
+  sv(); closeM(); render();
+  alert('🥚 交配成功！生下了一枚蕴含特殊力量的蛋。');
+}
+// ==========================================
+// 📅 每日任务系统
+// ==========================================
+var DAILY_POOL_1 = [
+  { id: 't1_breed', name: '繁殖一次', type: 'breed', target: 1, reward: 1 },
+  { id: 't1_race', name: '头马比赛一次', type: 'race', target: 1, reward: 1 },
+  { id: 't1_buy', name: '购买一匹马', type: 'buy_horse', target: 1, reward: 1 },
+  { id: 't1_hire', name: '雇佣提交一匹马', type: 'hire_horse', target: 1, reward: 1 }
+];
+var DAILY_POOL_2 = [
+  { id: 't2_breed', name: '繁殖三次', type: 'breed', target: 3, reward: 2 },
+  { id: 't2_train', name: '头马训练三次', type: 'train', target: 3, reward: 2 },
+  { id: 't2_hatch', name: '孵化5个蛋', type: 'hatch', target: 5, reward: 2 },
+  { id: 't2_hire', name: '雇佣提交5匹马', type: 'hire_horse', target: 5, reward: 2 },
+  { id: 't2_refresh', name: '商店刷新一次', type: 'shop_refresh', target: 1, reward: 2 }
+];
+var DAILY_POOL_3 = [
+  { id: 't3_breed', name: '繁殖5次', type: 'breed', target: 5, reward: 3 },
+  { id: 't3_hatch', name: '孵化10个蛋', type: 'hatch', target: 10, reward: 3 },
+  { id: 't3_race', name: '头马比赛三次', type: 'race', target: 3, reward: 3 },
+  { id: 't3_train', name: '头马训练三次', type: 'train', target: 3, reward: 3 },
+  { id: 't3_potion', name: '使用一次药剂', type: 'potion', target: 1, reward: 3 }
+];
+
+function initDailyTasks() {
+  var now = Date.now();
+  if (!S.dailyTasks || now >= S.dailyTaskResetTime) {
+    S.dailyTasks = [
+      Object.assign({}, DAILY_POOL_1[Math.floor(Math.random() * DAILY_POOL_1.length)], { progress: 0, claimed: false }),
+      Object.assign({}, DAILY_POOL_2[Math.floor(Math.random() * DAILY_POOL_2.length)], { progress: 0, claimed: false }),
+      Object.assign({}, DAILY_POOL_3[Math.floor(Math.random() * DAILY_POOL_3.length)], { progress: 0, claimed: false })
+    ];
+    S.dailyTaskResetTime = now + 24 * 60 * 60 * 1000;
+    S.lastDailyRefreshDate = '';
+    sv();
+  }
+}
+
+function refreshDailyTasks() {
+  var today = new Date().toDateString();
+  if (S.lastDailyRefreshDate === today) return alert('今天已经刷新过了，请明天再来！');
+  if (S.crystal < 3) return alert('水晶币不足（需要 3 💎）！');
+  if (!confirm('确定花费 3 💎 刷新每日任务吗？')) return;
+  
+  S.crystal -= 3;
+  S.dailyTasks = [
+    Object.assign({}, DAILY_POOL_1[Math.floor(Math.random() * DAILY_POOL_1.length)], { progress: 0, claimed: false }),
+    Object.assign({}, DAILY_POOL_2[Math.floor(Math.random() * DAILY_POOL_2.length)], { progress: 0, claimed: false }),
+    Object.assign({}, DAILY_POOL_3[Math.floor(Math.random() * DAILY_POOL_3.length)], { progress: 0, claimed: false })
+  ];
+  S.lastDailyRefreshDate = today;
+  sv(); render('daily'); render('top');
+}
+
+function updateDailyTaskProgress(type, amount) {
+  if (!S.dailyTasks) return;
+  var changed = false;
+  for (var i = 0; i < S.dailyTasks.length; i++) {
+    var task = S.dailyTasks[i];
+    if (!task.claimed && task.type === type && task.progress < task.target) {
+      task.progress += amount;
+      if (task.progress > task.target) task.progress = task.target;
+      changed = true;
+    }
+  }
+  if (changed) {
+    sv();
+    render('daily');
+  }
+}
+
+
+function mkDailyUI() {
+  var box = $('dailyBox');
+  if (!box) return;
+  initDailyTasks(); 
+  
+  var now = Date.now();
+  var rem = S.dailyTaskResetTime - now;
+  if (rem < 0) rem = 0;
+  var h = Math.floor(rem / 3600000);
+  var m = Math.floor((rem % 3600000) / 60000);
+  var s = Math.floor((rem % 60000) / 1000);
+  
+  var sub = $('dailySub');
+  if (sub) sub.textContent = '重置 ' + h + 'h ' + m + 'm ' + s + 's';
+  
+  box.innerHTML = '';
+  var wrap = ce('div');
+  wrap.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:10px;';
+  
+  for (var i = 0; i < S.dailyTasks.length; i++) {
+    (function(idx){
+      var task = S.dailyTasks[idx];
+      var isDone = task.progress >= task.target;
+      var card = ce('div');
+      card.className = 'sc';
+      card.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px;';
+      
+      var left = ce('div');
+      left.innerHTML = '<div style="font-size:13px; font-weight:bold; color:var(--page-fg);">' + task.name + '</div>' +
+                       '<div style="font-size:11px; color:var(--page-dim); margin-top:4px;">进度: ' + task.progress + ' / ' + task.target + '</div>' +
+                       '<div style="font-size:11px; color:var(--gold); margin-top:2px;">奖励: ' + task.reward + ' 💎</div>';
+      
+      var right = ce('div');
+      if (task.claimed) {
+        right.innerHTML = '<div style="color:var(--st-used); font-weight:bold; font-size:12px;">已领取</div>';
+      } else if (isDone) {
+        var btn = ce('button');
+        btn.className = 'primary';
+        btn.textContent = '领取';
+        btn.style.cssText = 'min-height:30px; padding:0 15px; font-size:12px;';
+        btn.onclick = function(){ claimDailyTask(idx); };
+        right.appendChild(btn);
+      } else {
+        right.innerHTML = '<div style="color:var(--page-muted); font-size:12px;">进行中</div>';
+      }
+      card.appendChild(left); card.appendChild(right);
+      wrap.appendChild(card);
+    })(i);
+  }
+  box.appendChild(wrap);
+  
+  var btnR = ce('button');
+  btnR.className = 'test';
+  btnR.style.cssText = 'width:100%; font-size:12px; min-height:32px;';
+  var canRefresh = (S.lastDailyRefreshDate !== new Date().toDateString());
+  btnR.textContent = canRefresh ? '🔄 花 3 💎 刷新任务' : '今日已刷新';
+  btnR.disabled = !canRefresh;
+  btnR.onclick = refreshDailyTasks;
+  box.appendChild(btnR);
+}
 // ==== 毛发噪点版 tintImg ====
 function tintImg(img, colorKey) {
   var ck = (img.src || 'placeholder') + '|' + colorKey;
@@ -1220,6 +1613,10 @@ var S = {
   r: 200,
   p: { m: 0, v: 0, i: 0, fire: 0, dispel: 0, hfan: 0, hfeng: 0, hmix: 0, hdrag: 0, hnight: 0 },
   points: 0,
+  crystal: 0, // 🌟 水晶币
+  guide: { started: false, completed: false, tasks: {} }, // 🌟 引导
+  crystal: 0, 
+  guide: { started: false, completed: false, tasks: {} },
   hoof: 0,
   trainCount: 1,
   hoofSubmitted: [false, false, false, false, false],
@@ -1257,6 +1654,13 @@ var S = {
    refreshData: { date: '', s01: 5, s00: 5 },
    arcPage: 1,
   arcPageSize: 24,
+  raffleColor: null,
+raffleWeek: 0,
+raffleUsedCount: 0,
+dailyTasks: null,
+dailyTaskResetTime: 0,
+lastDailyRefreshDate: '',
+ raffleLastDate: '',
 };
 function findC(id){for(var i=0;i<S.c.length;i++)if(S.c[i].id===id)return S.c[i];for(var j=0;j<S.a.length;j++)if(S.a[j].id===id)return S.a[j];return null}
 function unlock(id) {
@@ -1395,6 +1799,10 @@ function getHirePrice(c){var price=1;var charm=rS(c);price+=Math.max(0,Math.floo
 // ==== 雇佣提交====
 function submitHorse00(c,idx){
   if(c.isLocked) return alert('🔒 该马匹已锁定，无法提交雇佣！');
+  
+  // 🌟 新增：拦截 G0 马匹
+  if(c.gen === 0) return alert('🚫 只能提交本马场繁育出生的马匹（不能提交第 0 代）！');
+
   if(!S.hoofSubmitted)S.hoofSubmitted=[false,false,false,false,false];
   if(S.hoofSubmitted[idx])return;
   
@@ -1411,9 +1819,12 @@ function submitHorse00(c,idx){
   S.c=S.c.filter(function(x){return x.id!==c.id});
   S.sel=S.sel.filter(function(x){return x!==c.id});
   if(S.head===c.id){S.head=null;S.headStart=0;S.headRace=0}
+  
+  completeGuideTask('g15');
+  updateDailyTaskProgress('hire_horse', 1);
+  
   sv();render();alert('🧲 雇佣成功！获得 '+price+' 枚马蹄铁。');
 }
-
 window._hSelected00 = [null,null,null,null,null];
 window._hSearch00 = '';
 
@@ -1421,9 +1832,9 @@ window._hSearch00 = '';
 function render00SelectList(idx) {
   var q = (document.getElementById('sel00Search').value || '').toLowerCase();
   var validHorses = S.c.filter(function(c){
-    if(c.isLocked) return false; // 上锁的马直接踢出列表！
-    if(c.sx==='h') return false;
-    if(c.var || c.mut || c.pie || c.firefly || c.sterile || c.doubleWomb) return false;
+   if(c.isLocked) return false; // 上锁的马直接踢出列表！
+   if(c.gen === 0) return false; // 🌟 新增：不能选 G0
+   if(c.var || c.mut || c.pie || c.firefly || c.sterile || c.doubleWomb) return false;
     if(!isH(c) || c.cd > Date.now()) return false;
     if(c.bc >= getMaxBc(c)) return false;
     if(c.id === S.head || c.id === S.stud) return false;
@@ -1510,7 +1921,7 @@ function mkStore00UI(){
 
   var title = ce('div');
   title.style.cssText = 'font-size:12px; color:var(--accent); font-weight:bold;';
-  title.textContent = '🌑 雇佣马匹（获取马蹄铁）';
+  title.textContent = '🌑 雇佣马匹（获取马蹄铁，仅限第1代及以上）';
 
   var btnGroup = ce('div');
   btnGroup.style.cssText = 'display:flex; gap:6px;';
@@ -1629,6 +2040,9 @@ if(S.c.length - count <= 5) {
           }
         }
       }
+      // 🌟 补上新手引导和每日任务的打点（按实际提交的数量算）
+  completeGuideTask('g15');
+  updateDailyTaskProgress('hire_horse', count);
       sv(); 
       render();
       alert('🧲 雇佣成功！批量获得了 ' + totalH + ' 枚马蹄铁。');
@@ -1637,9 +2051,9 @@ if(S.c.length - count <= 5) {
   } else {
     // === 一键填充模式 ===
     var validHorses = S.c.filter(function(c){
-      if(c.isLocked) return false; // 🌟 核心：上锁的马不参与一键填充！
-      if(c.sx==='h') return false;
-      if(c.var || c.mut || c.pie || c.firefly || c.sterile || c.doubleWomb) return false;
+   if(c.isLocked) return false; // 🌟 核心：上锁的马不参与一键填充！
+   if(c.gen === 0) return false; // 🌟 新增：不能选 G0
+   if(c.var || c.mut || c.pie || c.firefly || c.sterile || c.doubleWomb) return false;
       if(!isH(c) || c.cd > Date.now()) return false;
       if(c.bc >= getMaxBc(c)) return false;
       if(c.id === S.head || c.id === S.stud) return false;
@@ -1786,6 +2200,7 @@ try {
       ec.querySelector('button').onclick=function(){
         S.hoof -= EGG_COST;
         S.eggCap = Math.min(EGG_CAPMAX, S.eggCap + EGG_STEP);
+       completeGuideTask('g17'); 
         sv(); render();
       };
     }
@@ -1811,9 +2226,9 @@ function checkDailyReset() {
     sv();
   }
 }
-
 function manualRefresh(type) {
   checkDailyReset();
+  
   if (type === '01') {
     if (S.refreshData.s01 <= 0) return alert('今日立刻刷新次数已用尽。');
     if (S.r < 100) return alert('胡萝卜不足 (需要 100 🥕)');
@@ -1821,14 +2236,19 @@ function manualRefresh(type) {
       S.r -= 100;
       S.refreshData.s01--;
       mkStore(true);
-      S.stT = Date.now(); // 🌟 花钱了，01商店时间重置为现在
-      sv(); render();
+      S.stT = Date.now(); 
+      
+      // 🌟 每日任务打点：月光商店刷新
+      updateDailyTaskProgress('shop_refresh', 1);
+      
+      sv(); 
+      render();
       showToast('🛒 月光商店已刷新！');
+      completeGuideTask('g8');
     }
-   } else if (type === '00') {
+  } else if (type === '00') {
     if (S.refreshData.s00 <= 0) return alert('今日立刻刷新次数已用尽。');
     
-    // 🌟 加上这句拦截
     var hasPending = window._hSelected00.some(function(id, i){ return id && !S.hoofSubmitted[i]; });
     if(hasPending) return alert('槽位中还有未提交的马匹，请先提交或清空后再刷新！');
     
@@ -1838,8 +2258,13 @@ function manualRefresh(type) {
       S.refreshData.s00--;
       S.trainCount = 1;
       S.hoofSubmitted = [false,false,false,false,false];
-      S.st00T = Date.now(); // 🌟 花钱了，00商店时间重置为现在
-      sv(); render();
+      S.st00T = Date.now(); 
+      
+      // 🌟 每日任务打点：缄默商店刷新
+      updateDailyTaskProgress('shop_refresh', 1);
+      
+      sv(); 
+      render();
       showToast('🌑 缄默商店已刷新！');
     }
   }
@@ -1873,17 +2298,358 @@ function mkStore(force){
     S.st.push(c);
   }
   
-  if (hasWingInStore) {
-    setTimeout(function(){ showToast('✨ 商店似乎进了一批带翅膀的好货！', true); }, 500);
+  // 🌟 先清理掉之前可能残留的翅膀提示
+var oldToasts = document.querySelectorAll('.toast');
+for (var t = 0; t < oldToasts.length; t++) {
+  if (oldToasts[t].textContent.indexOf('带翅膀的好货') >= 0) {
+    oldToasts[t].remove();
   }
 }
-function buyStore(i){var it=S.st[i];if(!it||it.sold)return;if(S.r<SPR){alert('胡萝卜不够');return}if(S.c.length>=S.cap){alert('马群已满');return}S.r-=SPR;it.sold=true;
-it.group = -1;it.store=false;S.c.push(it);mkDex(it);sv();render()}
+
+if (hasWingInStore) {
+  setTimeout(function(){ showToast('✨ 商店似乎进了一批带翅膀的好货！', true); }, 500);
+}
+}
+function buyStore(i){
+  var it = S.st[i];
+  if(!it || it.sold) return;
+  if(S.r < SPR){ alert('胡萝卜不够'); return; }
+  if(S.c.length >= S.cap){ alert('马群已满'); return; }
+  
+  S.r -= SPR;
+  it.sold = true;
+  it.group = -1;
+  it.store = false;
+  S.c.push(it);
+  mkDex(it);
+  
+  // 🌟 核心修复：补回新手引导 g3，并加上每日任务打点
+  completeGuideTask('g3');
+  updateDailyTaskProgress('buy_horse', 1);
+  
+  sv(); 
+  render();
+}
 function buyPot(t){if(t==='fire'){if(S.points<FP){alert('荧光点不够');return}S.points-=FP;S.p.fire=(S.p.fire||0)+1;}else if(t==='dispel'){if(S.r<DP){alert('胡萝卜不够');return}S.r-=DP;S.p.dispel=(S.p.dispel||0)+1;}else{var pr=t==='m'?MP:t==='v'?VP:IP;if(S.r<pr){alert('胡萝卜不够');return}S.r-=pr;S.p[t]=(S.p[t]||0)+1;}sv();render()}
-function buyCap(){if(S.cap>=CAPMAX){alert('已达上限 '+CAPMAX);return}if(S.r<CAPSTEP){alert('胡萝卜不够');return}S.r-=CAPSTEP;S.cap=Math.min(CAPMAX,S.cap+10);unlock('cap50');if(S.cap>=100)unlock('cap100');if(S.cap>=200)unlock('cap200');sv();render()}
-function showM(html){$('modalC').innerHTML=html;$('modal').style.display='flex'}
+function buyCap(){if(S.cap>=CAPMAX){alert('已达上限 '+CAPMAX);return}if(S.r<CAPSTEP){alert('胡萝卜不够');return}S.r-=CAPSTEP;S.cap=Math.min(CAPMAX,S.cap+10);unlock('cap50');if(S.cap>=100)unlock('cap100');if(S.cap>=200)unlock('cap200');completeGuideTask('g9');sv();render()}
+var _pedigreeDomCache = {}; // 🌟 用来存族谱 DOM 的临时仓库
+
+function showM(html) {
+  $('modalC').innerHTML = html;
+  $('modal').style.display = 'flex';
+  
+  // 🌟 核心：在弹窗显示后，把真实的 DOM 族谱塞进去
+  for (var id in _pedigreeDomCache) {
+    var placeholder = document.getElementById(id);
+    if (placeholder) {
+      placeholder.appendChild(_pedigreeDomCache[id]);
+      delete _pedigreeDomCache[id];
+    }
+  }
+}
 function closeM(){$('modal').style.display='none'}
-function toggleLock(id){var c=findC(id);if(!c)return;c.isLocked=!c.isLocked;sv();closeM();render();}
+function toggleLock(id){var c=findC(id);if(!c)return;c.isLocked=!c.isLocked;completeGuideTask('g12');sv();closeM();render();}
+// ==========================================
+// 🌳 家系系统：树状图与近交计算 (防爆防溢出版)
+// ==========================================
+function calcInbreeding(c) {
+  if (!c.par || c.par.length === 0) return { rate: 0, coeff: c.inbCoeff || 0 };
+  
+  var ancestorsA = {};
+  var ancestorsB = {};
+  
+  // 收集4代内父系和母系的祖先ID
+  function collect(id, depth, dict) {
+    if (!id || depth > 4) return;
+    dict[id] = true; 
+    var h = findC(id);
+    if (h && h.par) {
+      collect(h.par[0], depth + 1, dict);
+      collect(h.par[1], depth + 1, dict);
+    }
+  }
+  
+  collect(c.par[0], 1, ancestorsA);
+  collect(c.par[1], 1, ancestorsB);
+  
+  // 统计父母双方有多少个相同的祖先ID
+  var overlapCount = 0;
+  for (var id in ancestorsA) {
+    if (ancestorsB[id]) overlapCount++;
+  }
+  
+  // 近交率：重合的祖先 / 最大理论祖先数（30），这是个随祖先存活状态变化的百分比
+  var rate = (overlapCount / 30) * 100;
+  
+  // 近交系数：直接读取存在马匹档案里的绝对数字（次数），如果没存，就现算本次的重合数
+  var coeff = c.inbCoeff !== undefined ? c.inbCoeff : overlapCount;
+  
+  return { 
+    rate: Math.min(100, rate).toFixed(1), 
+    coeff: coeff,
+    currentOverlap: overlapCount // 传给 breed 函数用的本次重合次数
+  };
+}
+function buildPedigreeHtml(c) {
+  var inb = calcInbreeding(c);
+  
+  var p1 = c.par && c.par[0] ? c.par[0] : null;
+  var p2 = c.par && c.par[1] ? c.par[1] : null;
+  var h1 = p1 ? findC(p1) : null, h2 = p2 ? findC(p2) : null;
+  var g1 = h1 && h1.par && h1.par[0] ? h1.par[0] : null;
+  var g2 = h1 && h1.par && h1.par[1] ? h1.par[1] : null;
+  var g3 = h2 && h2.par && h2.par[0] ? h2.par[0] : null;
+  var g4 = h2 && h2.par && h2.par[1] ? h2.par[1] : null;
+  
+  var ggIds = [];
+  [g1, g2, g3, g4].forEach(function(gid) {
+    var gg = gid ? findC(gid) : null;
+    ggIds.push(gg && gg.par && gg.par[0] ? gg.par[0] : null);
+    ggIds.push(gg && gg.par && gg.par[1] ? gg.par[1] : null);
+  });
+
+function getHorseNode(id, isSelf) {
+  var wrapper = document.createElement('div');
+  wrapper.style.cssText = 'width: 72px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; flex-shrink: 0;';
+  
+  if (!id) {
+    // 空白/未知格子
+    var empty = document.createElement('div');
+    empty.style.cssText = 'width: 48px; height: 48px; flex-shrink: 0; border-radius: 4px; background: var(--inner-bg); border: 1px dashed var(--page-dim); display: flex; align-items: center; justify-content: center;';
+    empty.innerHTML = '<span style="color: var(--page-muted); font-size:18px; font-weight:bold;">✕</span>';
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  var horse = findC(id);
+ // 🌟 核心修复：兼容大写 RAFFLE_ 和小写 raffle 开头
+var isRaffle = (id.indexOf('RAFFLE_') === 0 || id.indexOf('raffle') === 0);
+
+if (!horse && isRaffle) {
+  // 准确匹配对应的数据源
+  var matchedStud = null;
+  for (var i = 0; i < RAFFLE_STUDS.length; i++) {
+    if (RAFFLE_STUDS[i].id === id) { matchedStud = RAFFLE_STUDS[i]; break; }
+  }
+  if (!matchedStud) matchedStud = RAFFLE_STUDS[0]; // 兜底
+  
+  horse = {
+    id: id,
+    name: matchedStud.name,
+    hid: id,
+    gen: 0,
+    g: Object.assign({}, matchedStud.g, { col: S.raffleColor, wingCol: S.raffleColor, tailCol: S.raffleColor }),
+    hat: 0,
+    mut: null, var: null
+  };
+}
+
+  var box = document.createElement('div');
+  box.style.cssText = 'width: 48px; height: 48px; flex-shrink: 0; border-radius: 4px; position: relative; overflow: hidden; border: 1px solid var(--card-bd); background: var(--horse-bg);';
+  
+  // 🌟 高亮显示逻辑：自己用选中色，抽奖马用专属深青色（适配日夜，对比度极高）
+if (isSelf) {
+  box.style.border = '2px solid var(--card-sel-bd)'; 
+} else if (isRaffle) {
+  box.style.border = '2px solid var(--diamond-fg)'; // 💎 使用水晶币专属色
+}
+
+  var dummy = { id: 'dummy', g: { col: 'grey_std', wingCol: 'grey_std', tailCol: 'grey_std', win: 'none', leg: 'hoof', bod: 'plain', hor: 'none', tai: 'horse', eye: 'round' }, hat: 0 };
+  var targetHorse = horse || dummy;
+  
+  var pbDiv = mkPB(targetHorse);
+  var canvas = pbDiv.querySelector('canvas');
+  if (canvas) {
+    canvas.style.cssText = 'width:100%; height:100%; image-rendering:pixelated;';
+    // 如果马匹已被删除（且不是抽奖马），则显示为剪影
+    if (!horse) {
+      canvas.style.filter = 'brightness(0) opacity(0.4)';
+    }
+  }
+  box.appendChild(pbDiv);
+  wrapper.appendChild(box);
+
+  var actualName = 'unknown';
+  if (horse) {
+    if (horse.name && !/^第\s*\d+\s*代$/.test(horse.name)) {
+      actualName = horse.name;
+    }
+  } else {
+    actualName = '已遗失'; 
+  }
+
+  var nameEl = document.createElement('div');
+  nameEl.style.cssText = 'font-size: 11px; font-weight: bold; color: var(--page-fg); margin-top: 4px; text-align: center; line-height: 1.2; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;';
+ if (isRaffle) nameEl.style.color = 'var(--diamond-fg)'; // 💎 名字用青色
+  nameEl.textContent = actualName;
+  nameEl.title = actualName;
+  wrapper.appendChild(nameEl);
+
+  var idEl = document.createElement('div');
+  idEl.style.cssText = 'font-size: 9px; color: var(--page-muted); text-align: center; line-height: 1.2; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;';
+  idEl.textContent = horse ? (horse.hid || 'unknown') : '';
+  idEl.title = horse && horse.hid ? horse.hid : 'unknown';
+  wrapper.appendChild(idEl);
+
+  return wrapper;
+}
+
+  function generateLines(pCount, cCount) {
+    var lineDiv = document.createElement('div');
+    lineDiv.style.cssText = 'width: 24px; height: 100%; position: relative; flex-shrink: 0;';
+    
+    for (var i = 0; i < pCount; i++) {
+      var y = (i + 0.5) / pCount * 100;
+      var y1 = (2 * i + 0.5) / cCount * 100;
+      var y2 = (2 * i + 1.5) / cCount * 100;
+
+      var h1 = document.createElement('div');
+      h1.style.cssText = 'position: absolute; top: ' + y + '%; left: 0; width: 12px; border-top: 2px solid var(--page-dim);';
+      lineDiv.appendChild(h1);
+
+      var v = document.createElement('div');
+      v.style.cssText = 'position: absolute; top: ' + y1 + '%; left: 12px; height: ' + (y2 - y1) + '%; border-left: 2px solid var(--page-dim);';
+      lineDiv.appendChild(v);
+
+      var h2 = document.createElement('div');
+      h2.style.cssText = 'position: absolute; top: ' + y1 + '%; left: 12px; width: 12px; border-top: 2px solid var(--page-dim);';
+      lineDiv.appendChild(h2);
+
+      var h3 = document.createElement('div');
+      h3.style.cssText = 'position: absolute; top: ' + y2 + '%; left: 12px; width: 12px; border-top: 2px solid var(--page-dim);';
+      lineDiv.appendChild(h3);
+    }
+    return lineDiv;
+  }
+
+ // 🌟 注入隐藏滚动条的样式 (只执行一次)
+if (!document.getElementById('hide-scroll-style')) {
+  var styleEl = document.createElement('style');
+  styleEl.id = 'hide-scroll-style';
+  styleEl.innerHTML = '.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }';
+  document.head.appendChild(styleEl);
+}
+
+// 🌟 完美方案：隐藏滚动条 + 防切边居中
+var scrollWrap = document.createElement('div');
+scrollWrap.className = 'hide-scrollbar'; // 应用隐藏滚动条类名
+scrollWrap.style.cssText = 'width: 100%; max-width: 100%; box-sizing: border-box; overflow-x: auto; overflow-y: hidden; padding: 10px 0; display: flex; -webkit-overflow-scrolling: touch;';
+
+var flexWrap = document.createElement('div');
+// 使用 flex-shrink:0 和 margin: auto 保证内容少时居中，内容多时正常左对齐滑动
+flexWrap.style.cssText = 'display: flex; align-items: center; height: 440px; flex-shrink: 0; padding: 0 4px; margin: auto;';
+
+var flexWrap = document.createElement('div');
+flexWrap.style.cssText = 'display: inline-flex; align-items: center; height: 440px; width: max-content; margin: 0 auto; padding: 0 4px; text-align: left;';
+
+  var col0 = document.createElement('div');
+  col0.style.cssText = 'display: flex; flex-direction: column; justify-content: space-around; height: 100%; width: 72px; align-items: center;';
+  col0.appendChild(getHorseNode(c.id, true));
+  flexWrap.appendChild(col0);
+
+  flexWrap.appendChild(generateLines(1, 2));
+
+  var col1 = document.createElement('div');
+  col1.style.cssText = 'display: flex; flex-direction: column; justify-content: space-around; height: 100%; width: 72px; align-items: center;';
+  col1.appendChild(getHorseNode(p1, false));
+  col1.appendChild(getHorseNode(p2, false));
+  flexWrap.appendChild(col1);
+
+  flexWrap.appendChild(generateLines(2, 4));
+
+  var col2 = document.createElement('div');
+  col2.style.cssText = 'display: flex; flex-direction: column; justify-content: space-around; height: 100%; width: 72px; align-items: center;';
+  col2.appendChild(getHorseNode(g1, false));
+  col2.appendChild(getHorseNode(g2, false));
+  col2.appendChild(getHorseNode(g3, false));
+  col2.appendChild(getHorseNode(g4, false));
+  flexWrap.appendChild(col2);
+
+  flexWrap.appendChild(generateLines(4, 8));
+
+  var col3 = document.createElement('div');
+  col3.style.cssText = 'display: flex; flex-direction: column; justify-content: space-around; height: 100%; width: 72px; align-items: center;';
+  for (var k = 0; k < 8; k++) {
+    col3.appendChild(getHorseNode(ggIds[k], false));
+  }
+  flexWrap.appendChild(col3);
+
+  scrollWrap.appendChild(flexWrap);
+
+  var pedId = 'ped_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  _pedigreeDomCache[pedId] = scrollWrap;
+
+  var h = '<details style="background:var(--card-bg-solid); border:1px solid var(--card-bd); border-radius:4px; padding:10px; margin-bottom:12px; text-align:left; color:var(--page-fg); max-width: 100%; box-sizing: border-box; overflow: hidden;">';
+  h += '<summary style="color:var(--accent); font-weight:bold; font-size:12px; border-bottom:1px solid var(--card-bd); padding-bottom:4px; margin-bottom:8px; user-select:none;">🌳 家系族谱 (点击展开)</summary>';
+  
+ // 🌟 核心新增：扫描自身及 4 代祖先，判断是否含有抽奖马血统
+var hasRaffleBlood = false;
+  var raffleBloodNames = [];
+  
+  function checkBlood(id, depth) {
+    if (!id || depth > 4) return;
+    
+    // 1. 如果是抽奖马本身的 ID
+    if (id.indexOf('RAFFLE_') === 0 || id.indexOf('raffle') === 0) {
+      hasRaffleBlood = true;
+      var matchedStud = RAFFLE_STUDS[0];
+      for (var i = 0; i < RAFFLE_STUDS.length; i++) {
+        if (RAFFLE_STUDS[i].id === id) { matchedStud = RAFFLE_STUDS[i]; break; }
+      }
+      if (raffleBloodNames.indexOf(matchedStud.name) < 0) {
+        raffleBloodNames.push(matchedStud.name);
+      }
+      return;
+    }
+    
+    // 2. 如果是后代，检查后台特殊字段
+    var h = findC(id);
+    if (h) {
+      if (h.specialT) {
+        hasRaffleBlood = true;
+        // 🌟 核心：把后台的 Dragon_Eye_I_Raffle 映射回『龙之眼 I』这个名字
+        var matchedName = h.specialT; 
+        for (var j = 0; j < RAFFLE_STUDS.length; j++) {
+          if (RAFFLE_STUDS[j].specialTrait === h.specialT) {
+            matchedName = RAFFLE_STUDS[j].name;
+            break;
+          }
+        }
+        if (raffleBloodNames.indexOf(matchedName) < 0) {
+          raffleBloodNames.push(matchedName);
+        }
+      }
+      if (h.par) {
+        checkBlood(h.par[0], depth + 1);
+        checkBlood(h.par[1], depth + 1);
+      }
+    }
+  }
+  
+  checkBlood(c.id, 0);
+
+h += '<div style="font-size:11px; color:var(--page-dim); margin-bottom:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">';
+h += '<span>代数: <b>第 ' + c.gen + ' 代</b></span>';
+h += '<span>近交率: <b style="color:' + (inb.rate > 0 ? 'var(--danger-fg)' : 'var(--st-ready)') + '">' + inb.rate + '%</b></span>';
+h += '<span>近交系数: <b style="color:' + (inb.coeff > 0 ? 'var(--danger-fg)' : 'var(--st-ready)') + '">' + inb.coeff + ' 次</b></span>';
+h += '</div>';
+
+
+ // 🌟 如果有血统，低调显示在框框里
+  if (hasRaffleBlood) {
+    h += '<div style="margin-bottom:12px;">';
+    // 使用内层背景色 + 次级边框色，文字用灰色，绝不抢戏
+    h += '<span style="display:inline-block; font-size:11px; padding:4px 10px; border-radius:4px; border:1px solid var(--card-bd); background:var(--inner-bg); color:var(--page-dim); font-weight:bold; letter-spacing: 0.5px;">';
+    h += '🧬 血统：' + raffleBloodNames.join('、');
+    h += '</span>';
+    h += '</div>';
+  }
+
+  h += '<div id="' + pedId + '"></div>';
+  h += '</details>';
+  
+  return h;
+}
 // ==== 浮窗ui ====
 function openMenu(id){
   var c=findC(id);if(!c)return;
@@ -2019,7 +2785,22 @@ if(c.currentFarmId) {
     + '<div style="font-size:11px;color:var(--page-dim);margin-bottom:6px">魅力值 '+rSFull(c)+'/30'+mutStr+'</div>'
     + '<div style="font-size:13px; font-weight:bold; margin-bottom:12px; background:var(--inner-bg); padding:4px 8px; border-radius:4px; display:inline-block;">'+bcStr+'</div>';
   h += buildGeneHtml(c);
+  // 🌟 渲染家系族谱
+h += buildPedigreeHtml(c);
+
+  // 🌟 核心：构建折叠小传面板
+  var bioHtml = '';
+  var hasBio = c.bio && c.bio.trim().length > 0;
+  // 转义 HTML 标签防止破坏页面，并保留换行
+  var bioDisplay = hasBio ? c.bio.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>") : '<span style="color:var(--page-muted)">这只小马还没有写下它的故事...</span>';
   
+  bioHtml += '<details style="background:var(--card-bg-solid); border:1px solid var(--card-bd); border-radius:4px; padding:8px; margin-bottom:12px; text-align:left; color:var(--page-fg);">';
+  bioHtml += '<summary style="color:var(--accent); font-weight:bold; font-size:12px; border-bottom:1px solid var(--card-bd); padding-bottom:4px; margin-bottom:6px; user-select:none;">📝 马匹小传 (点击展开)</summary>';
+  bioHtml += '<div style="font-size:12px; line-height:1.6; word-break:break-all; max-height:120px; overflow-y:auto; white-space:normal;">' + bioDisplay + '</div>';
+  bioHtml += '<button onclick="editBio(\''+id+'\')" style="width:100%; margin-top:8px; padding:4px; font-size:12px; min-height:28px; background:var(--btn-bg); border-color:var(--btn-bd);">✏️ 编辑小传</button>';
+  bioHtml += '</details>';
+  
+  h += bioHtml;
   h += '<div class="ma">';
   if(!isEgg)h+='<button onclick="rename(\''+id+'\')">✏️ 改名</button>';
   h += '<button onclick="toggleLock(\''+id+'\')">'+(c.isLocked?'🔓 解锁':'🔒 锁定')+'</button>';
@@ -2043,6 +2824,28 @@ if(c.currentFarmId) {
     }
     if(S.stud===id&&!isHead)h+='<button onclick="unsetStud()">取消种马'+(S.studL>0?'（花 '+UNSET_FEE+'🥕）':'')+'</button>';
     if(!c.var&&!isEgg&&!isHead)h+='<button onclick="confirmSetHead(\''+id+'\')">👑 设为首马</button>';
+ // 🌟 升级版：移动分组（折叠、排他、不含未分类、排除头马）
+var currentGroup = (c.group === undefined || c.group === null) ? -1 : c.group;
+var otherGroups = [];
+for (var gi = 0; gi < S.groups.length; gi++) {
+  if (gi !== currentGroup) otherGroups.push(gi);
+}
+
+// 🌟 核心修改：加上了 !isHead，头马不显示移动选项
+if (otherGroups.length > 0 && !isHead) {
+  h += '<details style="margin-top: 10px; width: 100%; border: 1px solid var(--test-bd); border-radius: 4px; background: var(--inner-bg);">';
+  h += '<summary style="list-style: none; padding: 8px; font-size: 12px; text-align: center; color: var(--page-fg); cursor: pointer; user-select: none;">';
+  h += '📁 移动到其他分组 (点击展开)';
+  h += '</summary>';
+  h += '<div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-top: 1px dashed var(--card-bd);">';
+  
+  for (var j = 0; j < otherGroups.length; j++) {
+    var gIdx = otherGroups[j];
+    h += '<button class="test" style="flex: 1 1 40%; font-size: 11px; padding: 6px 4px; min-height: 28px;" onclick="moveHorseGroup(\''+id+'\', '+gIdx+')">' + S.groups[gIdx] + '</button>';
+  }
+  
+  h += '</div></details>';
+}
     if(!c.var&&!isHead)h+='<button onclick="archive(\''+id+'\')">📌 保存到永久档案</button>';
   }
   
@@ -2060,6 +2863,7 @@ function moveHorseGroup(id, targetG) {
   var c = findC(id);
   if(!c) return;
   c.group = parseInt(targetG);
+  completeGuideTask('g6');
   sv(); closeM(); render('list');
 }
 // 🌟 自定义输入框弹窗（完美适配手机键盘防遮挡 + PC端焦点稳定）
@@ -2122,18 +2926,154 @@ function rename(id){
     }
 
     c.name = n;
+    completeGuideTask('g11');
     if(c.name) unlock('named');
     sv(); closeM(); 
     render('list'); 
     render('breed'); // 🌟 核心：刷新繁育面板里的名字
   });
 }
-function useP(id,t){var c=findC(id);if(!c)return;if(t==='m'){if(S.p.m<=0||c.mut||c.pie)return;S.p.m--;c.mut=pk(MT)}else if(t==='v'){
-  if(S.p.v<=0||c.var||S.a.indexOf(c)<0)return;
-  if(!confirm('⚠️ 警告：变异魔药是单向不可逆的！\n使用后将永久改变该马匹的变异形态（不可通过消融魔药洗掉）。\n确定要使用吗？')) return;
-  S.p.v--;
-  c.var=pk(VT);
-}else if(t==='i'){if(S.p.i<=0||c.sx==='m'||c.induceHerm)return;S.p.i--;c.induceHerm=true}else if(t==='fire'){if(S.p.fire<=0||isH(c)||c.firefly)return;S.p.fire--;c.firefly=true}else if(t==='dispel'){if(S.p.dispel<=0)return;var muts=[];if(c.mut)muts.push('mut');if(c.pie)muts.push('pie');if(c.firefly)muts.push('firefly');if(c.sterile)muts.push('sterile');if(c.doubleWomb)muts.push('doubleWomb');if(muts.length===0)return;S.p.dispel--;var rm=pk(muts);if(rm==='mut')c.mut=null;if(rm==='pie')c.pie=false;if(rm==='firefly')c.firefly=false;if(rm==='sterile')c.sterile=false;if(rm==='doubleWomb')c.doubleWomb=false}else if(t==='hfan'){if(S.p.hfan<=0||c.bc<10||c.usedHfan)return;S.p.hfan--;c.usedHfan=true;c.bc-=5}else if(t==='hfeng'){if(S.p.hfeng<=0||!c.sterile||c.usedHfeng)return;S.p.hfeng--;c.usedHfeng=true;c.tempBreed=true}else if(t==='hmix'){if(S.p.hmix<=0)return;S.p.hmix--;c.g.col=pk(CK);c.g.wingCol=pk(CK);c.g.tailCol=pk(CK)}else if(t==='hdrag'){if(S.p.hdrag<=0||S.head!==id||c.tempCharmBonus)return;S.p.hdrag--;c.tempCharmBonus=10}else if(t==='hnight'){if(S.p.hnight<=0||S.head!==id||getSpeed(c)>=20)return;S.p.hnight--;var add=1+Math.floor(Math.random()*5);c.trainSpeed+=add;if(c.trainSpeed>20)c.trainSpeed=20}sv();closeM();render();checkGlobalAch();sv()}
+// 🌟 编辑小传弹窗
+function editBio(id) {
+  var c = findC(id);
+  if (!c) return;
+  
+  var currentBio = c.bio || '';
+  
+  var h = '<div class="mdt">📝 编辑小传 (最多 5000 字符)</div>';
+  h += '<div style="font-size:11px; color:var(--page-dim); margin-bottom:8px;">注：1个汉字算2字符，马匹的名字和故事会永久保存在存档中。</div>';
+  h += '<textarea id="bioInput" class="breed-search" style="width:100%; height:180px; padding:10px; font-family:inherit; font-size:13px; line-height:1.5; resize:none; box-sizing:border-box; margin-bottom:6px;" placeholder="在这里写下这匹马的故事..."></textarea>';
+  h += '<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:12px;">';
+  h += '<span id="bioCount" style="color:var(--page-dim);">0 / 5000</span>';
+  h += '<span style="color:var(--page-muted);">(换行算1字符)</span>';
+  h += '</div>';
+  
+  h += '<div style="display:flex; gap:10px;">';
+  h += '<button class="mc" style="flex:1;" onclick="openMenu(\''+id+'\')">取消</button>';
+  h += '<button class="primary" id="bioSaveBtn" style="flex:1;">保存</button>';
+  h += '</div>';
+  
+  showM(h);
+  
+  var ta = document.getElementById('bioInput');
+  var countEl = document.getElementById('bioCount');
+  var saveBtn = document.getElementById('bioSaveBtn');
+  
+  ta.value = currentBio;
+  
+  // 字符计算函数（汉字/全角算2，英文/数字/半角算1）
+  var calcLen = function(str) {
+    var len = 0;
+    for (var i = 0; i < str.length; i++) {
+      if (str.charCodeAt(i) > 127 || str.charCodeAt(i) == 94) len += 2;
+      else len += 1;
+    }
+    return len;
+  };
+  
+  var updateCount = function() {
+    var len = calcLen(ta.value);
+    countEl.textContent = len + ' / 5000';
+    if (len > 5000) {
+      countEl.style.color = 'var(--st-used)';
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '0.5';
+    } else {
+      countEl.style.color = 'var(--page-dim)';
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = '1';
+    }
+  };
+  
+  ta.oninput = updateCount;
+  updateCount(); // 初始化
+  
+  // 延迟自动聚焦
+  setTimeout(function(){ ta.focus(); }, 150);
+  
+  saveBtn.onclick = function() {
+    if (calcLen(ta.value) > 5000) return;
+    c.bio = ta.value.trim();
+    sv();
+    openMenu(id); // 保存后重新打开详情页，立刻看到更新后的小传
+    render('list');
+  };
+}
+function useP(id, t) {
+  var c = findC(id);
+  if (!c) return;
+  
+  if (t === 'm') {
+    if (S.p.m <= 0 || c.mut || c.pie) return;
+    S.p.m--;
+    c.mut = pk(MT);
+  } else if (t === 'v') {
+    if (S.p.v <= 0 || c.var || S.a.indexOf(c) < 0) return;
+    if (!confirm('⚠️ 警告：变异魔药是单向不可逆的！\n使用后将永久改变该马匹的变异形态（不可通过消融魔药洗掉）。\n确定要使用吗？')) return;
+    S.p.v--;
+    c.var = pk(VT);
+  } else if (t === 'i') {
+    if (S.p.i <= 0 || c.sx === 'm' || c.induceHerm) return;
+    S.p.i--;
+    c.induceHerm = true;
+  } else if (t === 'fire') {
+    if (S.p.fire <= 0 || isH(c) || c.firefly) return;
+    S.p.fire--;
+    c.firefly = true;
+  } else if (t === 'dispel') {
+    if (S.p.dispel <= 0) return;
+    var muts = [];
+    if (c.mut) muts.push('mut');
+    if (c.pie) muts.push('pie');
+    if (c.firefly) muts.push('firefly');
+    if (c.sterile) muts.push('sterile');
+    if (c.doubleWomb) muts.push('doubleWomb');
+    if (muts.length === 0) return;
+    S.p.dispel--;
+    var rm = pk(muts);
+    if (rm === 'mut') c.mut = null;
+    if (rm === 'pie') c.pie = false;
+    if (rm === 'firefly') c.firefly = false;
+    if (rm === 'sterile') c.sterile = false;
+    if (rm === 'doubleWomb') c.doubleWomb = false;
+  } else if (t === 'hfan') {
+    if (S.p.hfan <= 0 || c.bc < 10 || c.usedHfan) return;
+    S.p.hfan--;
+    c.usedHfan = true;
+    c.bc -= 5;
+  } else if (t === 'hfeng') {
+    if (S.p.hfeng <= 0 || !c.sterile || c.usedHfeng) return;
+    S.p.hfeng--;
+    c.usedHfeng = true;
+    c.tempBreed = true;
+  } else if (t === 'hmix') {
+    if (S.p.hmix <= 0) return;
+    S.p.hmix--;
+    c.g.col = pk(CK);
+    c.g.wingCol = pk(CK);
+    c.g.tailCol = pk(CK);
+  } else if (t === 'hdrag') {
+    if (S.p.hdrag <= 0 || S.head !== id || c.tempCharmBonus) return;
+    S.p.hdrag--;
+    c.tempCharmBonus = 10;
+  } else if (t === 'hnight') {
+    if (S.p.hnight <= 0 || S.head !== id || getSpeed(c) >= 20) return;
+    S.p.hnight--;
+    var add = 1 + Math.floor(Math.random() * 5);
+    c.trainSpeed += add;
+    if (c.trainSpeed > 20) c.trainSpeed = 20;
+  }
+
+  // 🌟 核心修复：把新手任务和每日任务打点提到最外面
+  completeGuideTask('g18');
+  updateDailyTaskProgress('potion', 1);
+
+  sv(); 
+  closeM(); 
+  render(); 
+  checkGlobalAch(); 
+  sv();
+}
 function setStud(id){
   var c=findC(id);
   if(!c || c.sx!=='m' || c.var || c.sterile || c.hasBeenStud || S.stud===id) return;
@@ -2159,6 +3099,7 @@ function setStud(id){
   S.studT=Date.now();
   S.studN=SMN+Math.random()*(SMX-SMN);
   unlock('hi');
+  completeGuideTask('g7');
   sv();
   closeM();
   render();
@@ -2170,6 +3111,11 @@ function archive(id){
     return alert('🔒 该马匹已锁定，无法归档！请先点击 ⋯ 菜单解锁。');
   }
   
+  // 🌟 核心修复：拦截正在担任种马的马匹
+  if(S.stud === id) {
+    return alert('👑 该马匹正在担任种马，无法归档！\n请先在种马面板取消它的种马身份。');
+  }
+  
   if(!confirm('⚠️ 警告：\n保存到永久档案后，该马匹将退役，无法再繁育，也无法改变部分基因。\n确定要归档吗？')) {
     return;
   }
@@ -2179,11 +3125,10 @@ function archive(id){
   if(idx<0)return;
   var c=S.c.splice(idx,1)[0];
   c.isRetiredHead=true;
-  if(S.stud===id){S.stud=null;S.studL=0}
   if(S.head===id){S.head=null;S.headStart=0;S.headRace=0}
   S.sel=S.sel.filter(function(x){return x!==id});
   S.a.push(c);
-  unlock('archived');sv();closeM();render();
+  unlock('archived');completeGuideTask('g13');sv();closeM();render();
 }
 function rmC(id){
   var target = findC(id);
@@ -2223,6 +3168,7 @@ function dlExp(){
       document.body.removeChild(a);
       setTimeout(function(){URL.revokeObjectURL(url)},2000);
       alert('✅ 存档文件已下载！');
+      completeGuideTask('g19');
     }catch(e){
       alert('下载失败，请尝试使用其他浏览器');
     }
@@ -2260,6 +3206,9 @@ function doImp(t){
     sv();
     closeM();
     render();
+    
+    // 🌟 新增：导入存档后，自动检测是否需要弹新手引导
+    setTimeout(checkGuidePopup, 500); 
     alert('✅ 存档导入成功！');
   }catch(e){
     alert('❌ 导入失败：'+e.message);
@@ -2322,19 +3271,32 @@ if(speed>=20){
   }
   bw.appendChild(rb);
   
-  var ab=ce('button');ab.className='danger';
-  var canArc=((c.sterile||c.bc>=getMaxBc(c))&&speed>=20);
-  if(canArc){
-    ab.textContent='📦 归档并更换头马';
-    ab.onclick=function(){
-      if(confirm('⚠️ 警告：\n归档后它将永久进入名人堂，无法再次担任头马，也无法繁育。\n确定要让它退役吗？')){archive(S.head)}
+ var ab = ce('button'); 
+ab.className = 'danger';
+
+// 🌟 核心修复：如果头马被锁定，直接禁用按钮并显示锁定状态
+if (c.isLocked) {
+  ab.disabled = true;
+  ab.textContent = '🔒 已锁定 (无法归档)';
+} else {
+  var canArc = ((c.sterile || c.bc >= getMaxBc(c)) && speed >= 20);
+  if (canArc) {
+    ab.textContent = '📦 归档并更换头马';
+    ab.onclick = function() {
+      if (confirm('⚠️ 警告：\n归档后它将永久进入名人堂，无法再次担任头马，也无法繁育。\n确定要让它退役吗？')) {
+        archive(S.head);
+      }
+    };
+  } else {
+    ab.disabled = true;
+    if (!c.sterile && c.bc < getMaxBc(c)) {
+      ab.textContent = '需用尽所有繁育次数';
+    } else {
+      ab.textContent = '需速度满 20';
     }
-  }else{
-    ab.disabled=true;
-    if(!c.sterile&&c.bc<getMaxBc(c))ab.textContent='需用尽所有繁育次数';
-    else ab.textContent='需速度满 20'
   }
-  bw.appendChild(ab);
+}
+bw.appendChild(ab);
   var mb=ce('button');mb.textContent='⋯';mb.onclick=function(){openMenu(S.head)};bw.appendChild(mb);
   box.appendChild(bw);
 }
@@ -2379,7 +3341,15 @@ function render(scope) {
 
   if (scope === 'all' || scope === 'top') {
     try {
-      $('stat').innerHTML = '马匹 ' + S.c.length + '/' + S.cap + ' · 孵化 ' + S.c.filter(function(c){return !isH(c)}).length + ' · 档案 ' + S.a.length + ' · 图鉴 ' + Object.keys(S.d).length + ' · <span class="cr">🥕 ' + S.r + '</span> · <span style="color:var(--hoof-fg)">🧲 ' + (S.hoof||0) + '</span> · <span style="color:var(--gold)">✨ ' + (S.points||0) + '</span>';
+    $('stat').innerHTML = 
+  '马匹 ' + S.c.length + '/' + S.cap + 
+  ' · 孵化 ' + S.c.filter(function(c){return !isH(c)}).length + 
+  ' · 档案 ' + S.a.length + 
+  ' · 图鉴 ' + Object.keys(S.d).length + 
+  ' · <span class="cr">🥕 ' + S.r + '</span>' + 
+  ' · <span style="color:var(--hoof-fg)">🧲 ' + (S.hoof||0) + '</span>' + 
+  ' · <span style="color:var(--gold)">✨ ' + (S.points||0) + '</span>' + 
+  ' · <span style="color:var(--diamond-fg)">💎 ' + (S.crystal||0) + '</span>';
       if($('farmNameBox')) $('farmNameBox').textContent = '🏡 ' + (S.farmName || '我的马场');
       if($('farmIdBox')) $('farmIdBox').textContent = S.farmId ? ('🆔 ' + S.farmId) : '';
     } catch(e) {}
@@ -2415,14 +3385,18 @@ function render(scope) {
         for(var gi=0; gi<S.groups.length; gi++){
           batchSel.innerHTML += '<option value="'+gi+'">'+S.groups[gi]+'</option>';
         }
-        batchSel.onchange = function(){
-          var targetG = parseInt(this.value);
-          if(isNaN(targetG)) return;
-          if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
-          S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
-          S._batchSel = [];
-          sv(); render('list');
-        };
+       batchSel.onchange = function(){
+  var targetG = parseInt(this.value);
+  if(isNaN(targetG)) return;
+  if(!S._batchSel || S._batchSel.length === 0) return alert('请先勾选要转移的马匹');
+  S.c.forEach(function(c){ if(S._batchSel.indexOf(c.id) >= 0) c.group = targetG; });
+  S._batchSel = [];
+  
+  // 🌟 补上新手打点
+  completeGuideTask('g6');
+  
+  sv(); render('list');
+};
         batchBar.appendChild(batchSel);
       }
       list.appendChild(batchBar);
@@ -2556,12 +3530,13 @@ function render(scope) {
     } catch(e) { console.error('孵化渲染失败', e); }
   }
 
-  if (scope === 'all' || scope === 'breed') {
+    if (scope === 'all' || scope === 'breed') {
     try { mkBreedUI(); } catch(e) { console.error('繁育UI渲染失败', e); }
   }
 
   if (scope === 'all' || scope === 'other') {
-    try { mkStudUI(); } catch(e) {}
+    try { mkStudUI(); } catch(e) { console.error('种马渲染失败', e); }
+    try { mkTaskHallUI(); } catch(e) {}
     try { mkStore(false); mkStoreUI(); } catch(e) {}
     try { mkStore00UI(); } catch(e) {}
     try { mkHeadUI(); } catch(e) {}
@@ -2822,7 +3797,181 @@ function showPotionDetail(storeType, id) {
     };
   }
 }
-function mkStudUI(){var b=$('studBox');b.innerHTML='';var sb=$('studSub');if(!S.stud){sb.textContent='未设置';var tip=ce('div');tip.className='em';tip.style.marginTop='8px';tip.textContent='当前没有种马。';b.appendChild(tip);var candidates=S.c.filter(function(c){return c.sx==='m'&&!c.var&&!c.sterile&&isH(c)&&!c.hasBeenStud});if(candidates.length>0){candidates.sort(function(a,b){return rSFull(b)-rSFull(a)});var best=candidates[0];var recBtn=ce('button');recBtn.className='primary';recBtn.style.cssText='width:100%;margin-top:8px;font-size:12px;padding:10px';recBtn.innerHTML='👑 一键设为种马：'+ (best.name||('第 '+best.gen+'代')) +'（魅力值 '+rSFull(best)+'）';recBtn.onclick=function(){setStud(best.id)};b.appendChild(recBtn);}else{var tip2=ce('div');tip2.className='em';tip2.textContent='马群中没有符合条件的成年雄性。';b.appendChild(tip2)}return}if(S.studL<=0){sb.textContent='已用尽';var tip3=ce('div');tip3.className='em';tip3.textContent='次数已用尽，请更换新种马。';b.appendChild(tip3);var c0=findC(S.stud);if(c0){var w0=ce('div');w0.className='si';w0.appendChild(mkPB(c0));var d0=ce('div');d0.className='sd';d0.innerHTML=(c0.name?'「'+c0.name+'」':'')+'<b>第 '+c0.gen+' 代</b> 次数已用尽';w0.appendChild(d0);b.appendChild(w0)}var candidates2=S.c.filter(function(c){return c.sx==='m'&&!c.var&&!c.sterile&&isH(c)&&!c.hasBeenStud&&c.id!==S.stud});;if(candidates2.length>0){candidates2.sort(function(a,b){return rSFull(b)-rSFull(a)});var best2=candidates2[0];var recBtn2=ce('button');recBtn2.className='primary';recBtn2.style.cssText='width:100%;margin-top:8px;font-size:12px;padding:10px';recBtn2.innerHTML='👑 一键更换新种马：'+ (best2.name||('第 '+best2.gen+'代')) +'（魅力值 '+rSFull(best2)+'）';recBtn2.onclick=function(){setStud(best2.id)};b.appendChild(recBtn2);}return}var c=findC(S.stud);if(!c){S.stud=null;sb.textContent='未设置';b.innerHTML='<div class="em">种马丢失</div>';return}var bonus=headBonus(c);var per=(rS(c)+bonus)*2;sb.textContent='剩余 '+S.studL+'/'+SB;var w=ce('div');w.className='si';w.appendChild(mkPB(c));var d=ce('div');d.className='sd';d.innerHTML=(c.name?'「'+c.name+'」':'')+'<b>第 '+c.gen+' 代</b> 雄性<br>魅力值 <b>'+rS(c)+'/30</b>'+(bonus?' (+'+bonus+' 突变奖励)':'')+'<br>剩余 <b>'+S.studL+'/'+SB+'</b><br>每次产 <b>'+per+'</b>🥕';var btn=ce('button');btn.className='danger';btn.textContent='取消种马'+(S.studL>0?'（'+UNSET_FEE+'🥕）':'');btn.onclick=unsetStud;w.appendChild(d);w.appendChild(btn);b.appendChild(w)}
+function mkStudUI() {
+  var b = $('studBox');
+  b.innerHTML = '';
+  var sb = $('studSub');
+  
+  // ==========================================
+  // 第一部分：原有的玩家种马逻辑
+  // ==========================================
+  if (!S.stud) {
+    sb.textContent = '未设置';
+    var tip = ce('div'); tip.className = 'em'; tip.style.marginTop = '8px'; tip.textContent = '当前没有种马。';
+    b.appendChild(tip);
+    
+    var candidates = S.c.filter(function(c){ return c.sx === 'm' && !c.var && !c.sterile && isH(c) && !c.hasBeenStud; });
+    if (candidates.length > 0) {
+      candidates.sort(function(a,b){ return rSFull(b) - rSFull(a); });
+      var best = candidates[0];
+      var recBtn = ce('button'); recBtn.className = 'primary';
+      recBtn.style.cssText = 'width:100%;margin-top:8px;font-size:12px;padding:10px';
+      recBtn.innerHTML = '👑 一键设为种马：' + (best.name || ('第 ' + best.gen + '代')) + '（魅力值 ' + rSFull(best) + '）';
+      recBtn.onclick = function(){ setStud(best.id); };
+      b.appendChild(recBtn);
+    } else {
+      var tip2 = ce('div'); tip2.className = 'em'; tip2.textContent = '马群中没有符合条件的成年雄性。';
+      b.appendChild(tip2);
+    }
+  } else if (S.studL <= 0) {
+    sb.textContent = '已用尽';
+    var tip3 = ce('div'); tip3.className = 'em'; tip3.textContent = '次数已用尽，请更换新种马。';
+    b.appendChild(tip3);
+    
+    var c0 = findC(S.stud);
+    if (c0) {
+      var w0 = ce('div'); w0.className = 'si'; w0.appendChild(mkPB(c0));
+      var d0 = ce('div'); d0.className = 'sd';
+      d0.innerHTML = (c0.name ? '「'+c0.name+'」' : '') + '<b>第 '+c0.gen+' 代</b> 次数已用尽';
+      w0.appendChild(d0); b.appendChild(w0);
+    }
+    
+    var candidates2 = S.c.filter(function(c){ return c.sx === 'm' && !c.var && !c.sterile && isH(c) && !c.hasBeenStud && c.id !== S.stud; });
+    if (candidates2.length > 0) {
+      candidates2.sort(function(a,b){ return rSFull(b) - rSFull(a); });
+      var best2 = candidates2[0];
+      var recBtn2 = ce('button'); recBtn2.className = 'primary';
+      recBtn2.style.cssText = 'width:100%;margin-top:8px;font-size:12px;padding:10px';
+      recBtn2.innerHTML = '👑 一键更换新种马：' + (best2.name || ('第 '+best2.gen+'代')) + '（魅力值 ' + rSFull(best2) + '）';
+      recBtn2.onclick = function(){ setStud(best2.id); };
+      b.appendChild(recBtn2);
+    }
+  } else {
+    var c = findC(S.stud);
+    if (!c) {
+      S.stud = null; sb.textContent = '未设置'; b.innerHTML = '<div class="em">种马丢失</div>';
+    } else {
+      var bonus = headBonus(c);
+      var per = (rS(c) + bonus) * 2;
+      sb.textContent = '剩余 ' + S.studL + '/' + SB;
+      
+      var w = ce('div'); w.className = 'si'; w.appendChild(mkPB(c));
+      var d = ce('div'); d.className = 'sd';
+      d.innerHTML = (c.name ? '「'+c.name+'」' : '') + '<b>第 '+c.gen+' 代</b> 雄性<br>' +
+                    '魅力值 <b>' + rS(c) + '/30</b>' + (bonus ? ' (+'+bonus+' 突变奖励)' : '') + '<br>' +
+                    '剩余 <b>' + S.studL + '/' + SB + '</b><br>' +
+                    '每次产 <b>' + per + '</b>🥕';
+      
+      var btn = ce('button'); btn.className = 'danger';
+      btn.textContent = '取消种马' + (S.studL > 0 ? '（' + UNSET_FEE + '🥕）' : '');
+      btn.onclick = unsetStud;
+      
+      w.appendChild(d); w.appendChild(btn); b.appendChild(w);
+    }
+  }
+
+ // ==========================================
+// 第二部分：加入本周特供抽奖种马（带对话框）
+// ==========================================
+if (!S.raffleColor || S.raffleColor === 'special_albino' || S.raffleColor === 'special_melanor' || !CL[S.raffleColor]) {
+  S.raffleColor = pk(CK); sv();
+}
+var currentWeek = getWeekNumber();
+if (S.raffleWeek !== currentWeek) {
+  S.raffleWeek = currentWeek; S.raffleUsedCount = 0; sv();
+}
+var studData = RAFFLE_STUDS[currentWeek % RAFFLE_STUDS.length];
+var cName = (CL[S.raffleColor] || CL['grey_std'])[0];
+var cHex = (CL[S.raffleColor] || CL['grey_std'])[1]; // 获取专属色的 Hex 用于高亮文字
+
+var section = ce('div');
+section.id = 'raffleSection';
+section.style.cssText = 'margin-top: 15px; border-top: 1px dashed var(--card-bd); padding-top: 15px;';
+
+var title = ce('div');
+title.style.cssText = 'font-size:14px; font-weight:bold; color:var(--gold); margin-bottom:8px; text-align:center; letter-spacing: 1px;';
+title.textContent = '🎲 抽奖种马';
+section.appendChild(title);
+
+// 🌟 1. 顶部氛围介绍文字
+var introWrap = ce('div');
+// 🌟 升级：字号改大到 14px，增加行高和文字间距，增加边框的金色高亮
+introWrap.style.cssText = 'background:var(--inner-bg); border:1px solid var(--card-bd); border-left: 3px solid var(--gold); border-radius:4px; padding:15px; margin-bottom:15px; font-size:14px; line-height:1.8; letter-spacing: 0.5px; color:var(--page-fg); text-align:justify; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+
+introWrap.innerHTML = 
+  '<div style="text-indent: 2em; color: var(--page-dim); font-weight: bold; margin-bottom: 6px;">遥远的月亮深处，一批马群自天穹迁徙而来……</div>' +
+  '<div style="text-indent: 2em;">它们的引领者，通体闪耀着' +
+  '<span style="color:' + cHex + '; font-weight:bold; padding:0 4px; text-shadow: 0 0 8px ' + cHex + ';">' + cName + '</span>' + 
+  '的光芒，高大而健壮，是一只美丽的雄性。它十分绅士地栖停在地，点头向你们致意，随后慢慢走近。</div>';
+  
+section.appendChild(introWrap);
+
+// 🌟 2. 带缓存的随机台词对话框
+var quotes = [
+  "“需要那些闪闪发光的小东西，是的。”",
+  "“很高兴见到你们。”",
+  "“这上面的风景不错。”",
+  "“这是如此美丽的夜晚。”",
+  "“愿月亮的血脉永垂不朽。”"
+];
+
+var nowT = Date.now();
+if (!S._raffleText || nowT - (S._raffleTime || 0) > 20000) {
+  S._raffleText = quotes[Math.floor(Math.random() * quotes.length)];
+  S._raffleTime = nowT;
+}
+
+var dialogBox = ce('div');
+dialogBox.className = 'k01-dialogue';
+dialogBox.style.cssText = 'margin-bottom: 12px; text-align: left; font-style: italic; border-color: var(--gold); box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+// 🌟 删除了提示文字，只显示台词
+dialogBox.textContent = S._raffleText; 
+section.appendChild(dialogBox);
+
+// 🌟 3. 核心数据与图片展示（包裹在一个卡片里）
+var wrap = ce('div');
+wrap.style.cssText = 'display:flex; gap:12px; align-items:center; background:var(--card-bg); border:1px solid var(--potion-bd); border-radius:6px; padding:12px; flex-wrap:wrap;';
+
+var pxDiv = ce('div'); 
+pxDiv.style.cssText = 'width:160px; flex-shrink:0; display:block;';
+
+var pb = mkRaffleHorsePB();
+pb.style.cssText = 'width:160px; height:160px; margin:0 auto;'; 
+pxDiv.appendChild(pb);
+
+var draftText = ce('div');
+draftText.style.cssText = 'display:block; width:100%; font-size:10px; color:var(--page-dim); text-align:center; margin-top:6px; line-height:1.2;'; 
+draftText.textContent = '本图像仅作为试运行草稿，不代表2.0模型。';
+pxDiv.appendChild(draftText);
+
+wrap.appendChild(pxDiv);
+
+var todayStr = new Date().toDateString();
+  var isTodayUsed = (S.raffleLastDate === todayStr);
+
+  var info = ce('div'); info.style.cssText = 'flex:1; min-width:150px; font-size:12px; line-height:1.6; color:var(--page-fg);';
+  info.innerHTML = '<b style="color:var(--gold); font-size:15px;">' + studData.name + '</b><br>' +
+                   '<span style="color:var(--page-dim);">本周剩余: ' + (7 - S.raffleUsedCount) + '/7 · 今日: ' + (isTodayUsed ? '<span style="color:var(--st-used)">已交配</span>' : '<span style="color:var(--st-ready)">可交配</span>') + '</span><br>' +
+                   '<span style="color:var(--diamond-fg);">交配花费: 5 💎</span>' +
+                   '<div style="margin-top: 6px;"><button class="test" onclick="showRaffleGene()" style="font-size:11px; padding:2px 8px; min-height:24px;">🔍 查看详细基因</button></div>';
+                   
+  var btn2 = ce('button'); btn2.className = 'primary';
+  btn2.style.cssText = 'width:100%; margin-top:8px; font-size:12px; min-height:32px;';
+  btn2.textContent = '💎 5 水晶币交配';
+  
+  if (isTodayUsed) { 
+    btn2.disabled = true; btn2.textContent = '今日次数已用尽'; 
+  } else if (S.raffleUsedCount >= 7) { 
+    btn2.disabled = true; btn2.textContent = '本周次数已用尽'; 
+  } else if (S.crystal < 5) { 
+    btn2.disabled = true; btn2.textContent = '水晶币不足'; 
+  }
+  
+  btn2.onclick = function() { breedWithRaffle(studData); };
+  
+  info.appendChild(btn2); wrap.appendChild(info); section.appendChild(wrap);
+  b.appendChild(section);
+}
 function mkStoreUI(){
   // === 1. 渲染马匹（居中对齐，卡片放大版） ===
   var se=$('storeGrid');se.innerHTML='';
@@ -2914,7 +4063,8 @@ if(cb){
       gc.querySelector('button').onclick=function(){
         S.r -= 500;
         // 🌟 动态加上数字后缀，比如当前有一个组，新组就叫 New Cave 1
-        S.groups.push('New Cave ' + S.groups.length); 
+        S.groups.push('New Cave ' + S.groups.length);
+        completeGuideTask('g10'); 
         sv(); render();
       };
     }
@@ -3232,7 +4382,12 @@ function tick(){
   }
   
   var hn=S.c.filter(function(c){return!isH(c)}).length;
-  if(hn<S._hc) needListRender=true; // 只有孵化完成时才全量刷新列表
+  // 🌟 每日任务打点 & 新手引导：孵化打点
+  if (hn < S._hc) {
+    needListRender = true;
+    completeGuideTask('g5'); 
+    updateDailyTaskProgress('hatch', S._hc - hn);
+  }
   S._hc=hn;
   
   // 2. 种马产出
@@ -3254,6 +4409,23 @@ function tick(){
       sv(); needTopRender = true; 
     }
   }
+
+  // 🌟 核心修复：检测是否有马匹的繁育冷却刚刚结束
+var cdEnded = false;
+for(var i=0; i<S.c.length; i++){
+  // 如果这匹马有CD，且CD时间已经到了，但还没被重置
+  if(S.c[i].cd > 0 && S.c[i].cd <= now) {
+    S.c[i].cd = 0; // 归零，表示现在可繁育
+    cdEnded = true;
+  }
+}
+// 如果有马匹刚刚冷却完毕，立刻刷新繁育面板的列表！
+if(cdEnded) {
+  try { 
+    // 如果当前页面有繁育面板，就触发更新
+    if($('breedM')) mkBreedUI(); 
+  } catch(e) {}
+}
   
   // 3. 头马逻辑 (含离线冻结)
   if(S.head){
@@ -3262,6 +4434,7 @@ function tick(){
     S.headLastTick=_nt;
     var hc=findC(S.head);
     if(hc&&getSpeed(hc)>=20)unlock('speed20');
+    if(hc&&getSpeed(hc)>=20)completeGuideTask('g21');
     if(hc&&headCharm(hc)>=40)unlock('charm40');
     if(now-S.headStart>=HEAD_FORCE){
       var hid=S.head;var idx=-1;
@@ -3322,7 +4495,7 @@ function doBreed(isTest){if(S.sel.length!==2)return;var a=findC(S.sel[0]),b=find
   if(!isTest&&S.c.length>=S.cap){alert('马群已满');return}
   var cost=Math.floor(Math.random()*2)+2;if(!isTest&&S.r<cost){alert('胡萝卜不够 (需要2-3根)');return}
   var r=breed(a,b);var c=r.c,mus=r.mus;
-  if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
+  if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);completeGuideTask('g4');if(!isTest) updateDailyTaskProgress('breed', 1);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
     {var c2,mus2;
       if(Math.random()<0.5){c2=JSON.parse(JSON.stringify(c));c2.id=uid();c2.hid=genHorseHid(S.farmId, collectAllHids());mus2=mus.slice()}
       else{
@@ -3358,6 +4531,230 @@ function toggleTheme() {
 
   localStorage.setItem('wd_theme_mode', next);
 }
+// ==========================================
+// 🌟 流水线式新手引导系统
+// ==========================================
+var GUIDE_TASKS = [
+  { id: 'g1', t: '设置一匹头马', r: '100 🥕' },
+  { id: 'g2', t: '完成一场比赛', r: '100 🥕' },
+  { id: 'g3', t: '在月光商店购买一匹马', r: '100 🥕' },
+  { id: 'g4', t: '繁育并生一个蛋', r: '1 💎' },
+  { id: 'g5', t: '孵化一个蛋', r: '100 🥕' },
+  { id: 'g6', t: '移动马匹至洞穴（可在马匹卡片的...中选择，或批量转移）', r: '100 🥕' },
+  { id: 'g7', t: '设置一匹种马', r: '1 💎' },
+  { id: 'g8', t: '刷新月光商店', r: '100 🥕' },
+  { id: 'g9', t: '在月光商店扩建马场', r: '100 🥕' },
+  { id: 'g10', t: '在月光商店扩建马群分组', r: '1 💎' },
+  { id: 'g11', t: '为一匹马起名（可在马匹卡片的...中选择）', r: '50 🥕' },
+  { id: 'g12', t: '锁定一匹马（可在马匹卡片的...中选择）', r: '50 🥕' },
+  { id: 'g13', t: '将一匹马保存至永久档案（可在马匹卡片的...中选择）', r: '1 💎' },
+  { id: 'g14', t: '头马进行3场比赛', r: '500 🥕' },
+  { id: 'g15', t: '在缄默商店雇佣提交一只马匹', r: '1 💎' },
+  { id: 'g16', t: '在缄默商店训练一次头马', r: '20 🧲' },
+  { id: 'g17', t: '在缄默商店扩建一次蛋槽', r: '50 🧲' },
+  { id: 'g18', t: '对马匹使用一次药剂（购买后，可在马匹卡片的...中选择使用）', r: '1 💎' },
+  { id: 'g19', t: '极速保存/导出存档一次', r: '50 ✨' },
+  { id: 'g20', t: '清理耗尽繁育次数的马匹（一键清理）', r: '100 🥕' },
+  { id: 'g21', t: '头马等级达到20', r: '5 💎' }
+];
+
+// 获取当前应该做的任务
+function getCurrentGuideTask() {
+  for (var i = 0; i < GUIDE_TASKS.length; i++) {
+    if (!S.guide.tasks[GUIDE_TASKS[i].id]) return GUIDE_TASKS[i];
+  }
+  return null; // 全做完了
+}
+// ==========================================
+// 🕵️ 老存档历史任务扫描 (仅在触发新手任务前运行)
+// ==========================================
+function scanLegacyGuideTasks() {
+  // 如果玩家已经开始过引导，或者这是全新存档，直接跳过
+  if (S.guide.started || S.guide.completed) return;
+  
+  var changed = false;
+
+  // 1. 任务 g1：设置一匹头马
+  if ((S.head || S.headTerm > 0) && !S.guide.tasks['g1']) {
+    S.guide.tasks['g1'] = 'done';
+    changed = true;
+  }
+  
+  // 🌟 新增：任务 g7：设置一匹种马
+  if (S.stud && !S.guide.tasks['g7']) {
+    S.guide.tasks['g7'] = 'done';
+    changed = true;
+  }
+  
+  // 2. 任务 g9：扩建马场 (初始上限是 50，大于 50 说明扩建过)
+  if (S.cap > 50 && !S.guide.tasks['g9']) {
+    S.guide.tasks['g9'] = 'done';
+    changed = true;
+  }
+  
+  // 3. 任务 g10：扩建马群分组 (初始只有 1 个分组，大于 1 说明扩建过)
+  if (S.groups.length > 1 && !S.guide.tasks['g10']) {
+    S.guide.tasks['g10'] = 'done';
+    changed = true;
+  }
+  
+  // 4. 任务 g16：训练一次头马
+  if ((S.trainSuccess > 0 || S.trainFail > 0) && !S.guide.tasks['g16']) {
+    S.guide.tasks['g16'] = 'done';
+    changed = true;
+  }
+  
+  // 5. 任务 g17：扩建一次蛋槽
+  if (S.eggCap > 10 && !S.guide.tasks['g17']) {
+    S.guide.tasks['g17'] = 'done';
+    changed = true;
+  }
+
+  if (changed) {
+    sv(); // 如果有任务被标记，立刻保存
+  }
+}
+function checkGuidePopup() {
+    // 🌟 核心：在显示弹窗之前，先扫描一遍老存档的历史记录
+  scanLegacyGuideTasks();
+  if (!S.guide.started && !S.guide.completed) {
+    var h = '<div class="mdt" style="text-align:center;">🌟 欢迎来到马场 🌟</div>';
+    h += '<div style="font-size:13px; color:var(--page-fg); line-height:1.6; margin-bottom:15px; text-align:left; padding:10px; background:var(--inner-bg); border-radius:4px;">';
+    h += '<b>01：</b>“嗨，新来的！我是01。很高兴见到你，要不要我带你熟悉一下流程？完成新手任务有丰厚的奖励哦！”<br><br>';
+    h += '如果你已经是个老手，也可以直接选择老手模式，一键领取所有奖励并跳过引导。';
+     h +='提示：可以在种马栏目下方找到任务大厅入口。';
+    h += '</div>';
+    h += '<div class="ma">';
+    h += '<button class="primary" onclick="startGuide()">开始新手引导</button>';
+    h += '<button class="test" onclick="skipGuide()">我是老手，直接领取奖励</button>';
+    h += '</div>';
+    showM(h);
+  }
+}
+
+function startGuide() {
+  S.guide.started = true;
+  sv(); 
+  closeM(); 
+  mkTaskHallUI(); // 立刻重绘任务大厅
+}
+
+function skipGuide() {
+  if(!confirm('⚠️ 确定要跳过新手引导吗？这将直接发放所有任务奖励（约1000🥕, 9💎, 70🧲, 50✨）。')) return;
+  S.guide.started = true;
+  S.guide.completed = true;
+  S.r += 1000; S.crystal += 9; S.hoof += 70; S.points += 50;
+  sv(); closeM(); mkTaskHallUI(); 
+  render('top');render('top');
+  showToast('🎁 已领取所有新手奖励！');
+}
+
+// ==========================================
+// 📜 任务大厅（合并新手与每日任务）
+// ==========================================
+function mkTaskHallUI() {
+  var box = $('taskHallBox');
+  if (!box) return;
+  
+  initDailyTasks(); // 确保每日任务被初始化
+
+  // 计算新手任务状态
+  var guideTask = getCurrentGuideTask();
+  var showGuide = S.guide.started && !S.guide.completed && guideTask !== null;
+  var guideDone = showGuide && S.guide.tasks[guideTask.id] === 'done';
+  
+  // 计算每日任务状态
+  var allDailyDone = true;
+  for (var i = 0; i < S.dailyTasks.length; i++) {
+    if (!S.dailyTasks[i].claimed) { allDailyDone = false; break; }
+  }
+  var canRefresh = (S.lastDailyRefreshDate !== new Date().toDateString());
+  
+  if (!showGuide && allDailyDone && !canRefresh) {
+    box.innerHTML = '<div class="em" style="padding:10px; text-align:center;">今日任务已全部完成！</div>';
+    $('taskHallSub').textContent = '';
+    return;
+  }
+
+  // 时间计算
+  var now = Date.now(); 
+  var rem = S.dailyTaskResetTime - now; 
+  if (rem < 0) rem = 0;
+  var h = Math.floor(rem / 3600000); 
+  var m = Math.floor((rem % 3600000) / 60000); 
+  $('taskHallSub').textContent = '每日刷新倒计时: ' + h + 'h ' + m + 'm';
+
+  var html = '';
+
+  // 👑 渲染新手任务
+  if (showGuide) {
+    html += '<div style="margin-bottom:12px; background:var(--card-bg); border:1px solid var(--gold); border-radius:6px; padding:10px;">';
+    html += '<div style="color:var(--gold); font-weight:bold; font-size:13px; margin-bottom:6px;">📜 新手引导</div>';
+    
+    if (guideDone) {
+      html += '<div style="font-size:13px; color:var(--st-ready); font-weight:bold; margin-bottom:6px;">✅ ' + guideTask.t + '</div>';
+      html += '<div style="font-size:12px; color:var(--gold); margin-bottom:6px;">奖励：' + guideTask.r + '</div>';
+      html += '<button class="primary" onclick="claimGuideReward(\''+guideTask.id+'\')" style="width:100%; padding:6px; font-size:12px; animation: pulse 1.5s infinite;">🎁 点击领取奖励</button>';
+    } else {
+      html += '<div style="font-size:13px; color:var(--page-fg); font-weight:bold; margin-bottom:4px;">👉 ' + guideTask.t + '</div>';
+      html += '<div style="font-size:12px; color:var(--gold);">奖励：' + guideTask.r + '</div>';
+    }
+    html += '</div>';
+  }
+
+ // 📅 渲染每日任务
+if (!allDailyDone || canRefresh) {
+  html += '<div style="background:var(--card-bg); border:1px solid var(--diamond-fg); border-radius:6px; padding:10px;">';
+  html += '<div style="color:var(--diamond-fg); font-weight:bold; font-size:13px; margin-bottom:8px;">📅 每日任务</div>';
+  
+  // 🌟 检查是否有已完成/已领取的任务
+  var hasDoneTask = false;
+
+  for (var i = 0; i < S.dailyTasks.length; i++) {
+    var task = S.dailyTasks[i]; 
+    var isDone = task.progress >= task.target;
+    if (isDone || task.claimed) hasDoneTask = true; // 记录状态
+    
+    html += '<div style="background:var(--inner-bg); border:1px solid var(--card-bd); border-radius:4px; padding:8px; margin-bottom:6px; font-size:12px; color:var(--page-fg); display:flex; justify-content:space-between; align-items:center;">';
+    
+    var leftHtml = '<div>' +
+                   '<div style="font-weight:bold; margin-bottom:2px;">' + task.name + '</div>' +
+                   '<div style="color:var(--page-dim); font-size:11px;">进度: ' + task.progress + ' / ' + task.target + '</div>' +
+                   '<div style="color:var(--gold); font-size:11px; margin-top:2px;">奖励: ' + task.reward + ' 💎</div>' +
+                   '</div>';
+    html += leftHtml;
+    
+    var rightHtml = '';
+    if (task.claimed) {
+      rightHtml = '<div style="color:var(--st-used); font-weight:bold; font-size:12px;">已领取</div>';
+    } else if (isDone) {
+      rightHtml = '<button class="primary" onclick="claimDailyTask(' + i + ')" style="padding:6px 12px; font-size:12px;">领取</button>';
+    } else {
+      rightHtml = '<div style="color:var(--page-muted); font-size:12px;">进行中</div>';
+    }
+    html += rightHtml;
+    html += '</div>';
+  }
+  
+  // 🌟 核心改动：渲染底部刷新按钮
+  if (canRefresh) {
+    if (hasDoneTask) {
+      // 如果有任务已经完成，禁用按钮并提示
+      html += '<button class="test" disabled style="width:100%; padding:6px; font-size:12px; margin-top:6px; opacity:0.5; cursor:not-allowed;">🔒 已有任务完成，无法刷新</button>';
+    } else {
+      // 如果全都没完成，可以正常刷新
+      html += '<button class="test" onclick="refreshDailyTasks()" style="width:100%; padding:6px; font-size:12px; margin-top:6px;">🔄 花 3 💎 刷新任务</button>';
+    }
+  } else {
+    // 如果今天已经刷新过了
+    html += '<button class="test" disabled style="width:100%; padding:6px; font-size:12px; margin-top:6px;">🔄 今日已刷新</button>';
+  }
+  html += '</div>';
+}
+
+  box.innerHTML = html;
+}
+
 function init(){
   var l=false;try{l=ld()}catch(e){}
   if(!l){
@@ -3379,8 +4776,13 @@ function init(){
     if(_nt-_lt>5000) S.headStart+=(_nt-_lt);
     S.headLastTick=_nt;
   }
-  
+
+  if (!S.raffleColor || S.raffleColor === 'special_albino' || S.raffleColor === 'special_melanor') {
+  S.raffleColor = pk(CK); sv();
+}
+initDailyTasks();
   render();
+   setTimeout(checkGuidePopup, 800); // 延迟800毫秒弹出，防止和加载画面冲突
 }
 $('svBtn').onclick=openSave;
 var _filterTimer = null;
@@ -3440,11 +4842,17 @@ S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
   // 重新生成初始马和商店
   for(var i=0; i<S.c.length; i++) mkDex(S.c[i]);
   mkStore(true);
-  
+  if (!S.raffleColor) {
+  S.raffleColor = pk(CK); // 从 48 色中随机挑一个作为本存档的专属抽奖马颜色
+  sv();
+}
+initDailyTasks();
   // 保存并刷新页面
   sv(); 
   closeM(); 
   render();
+   // 🌟 新增：清空存档后，自动检测是否需要弹新手引导
+  setTimeout(checkGuidePopup, 500);
 }
 initColorSelect();
 $('sColor').onchange=function(){ setTimeout(function(){ render('list'); }, 60); };
@@ -3703,8 +5111,9 @@ $('breedFSearch').oninput=function(){mkBreedUI()};
 function getSpeed(c){if(!c)return 0;var base=c.trainSpeed||0;if(S.head!==c.id)return base;var elapsed=Date.now()-S.headStart;if(elapsed>=HEAD_FULL)return 20;var progress=elapsed/HEAD_FULL;return Math.round((base+(20-base)*progress)*10)/10}
 function headBonus(c){var b=0;if(c.sx==='h')b+=5;if(c.mut||c.pie)b+=5;return b;}
 function headCharm(c){return rSFull(c)+headBonus(c)}
-function setHead(id){var c=findC(id);if(!c)return;if(S.head===id)return;if(!isH(c)||c.var){alert('这匹马不能当首马');return}if(S.a.indexOf(c)>=0){alert('档案里的马不能当首马');return}if(S.head){var cur=findC(S.head);if(cur){if(!cur.sterile&&cur.bc<getMaxBc(cur)){alert('当前首马需用完所有繁育次数才能更换');return}if(getSpeed(cur)<20){alert('当前首马速度满 20 才能更换');return}var idx=-1;for(var i=0;i<S.c.length;i++)if(S.c[i].id===S.head){idx=i;break}if(idx>=0){var oc=S.c.splice(idx,1)[0];oc.isRetiredHead=true;S.a.push(oc);unlock('archived')}}}S.head=id;S.headTerm=(S.headTerm||0)+1;c.headTerm=S.headTerm;c.raceCount=c.raceCount||0;S.headStart=Date.now();S.headRace=0;S.headLastTick=Date.now();unlock('head');sv();closeM();render()}
-function trainHead00(){if(!S.head)return;var c=findC(S.head);if(!c)return;if(getSpeed(c)>=20){alert('头马已满级，无需训练。');return}if((S.hoof||0)<20){alert('马蹄铁不够！当前只有 '+(S.hoof||0)+' 个，特训需要 20 个。');return}if((S.trainCount||0)<=0){alert('本周期特训次数已用尽，请等待商店刷新！');return}S.hoof-=20;S.trainCount=(S.trainCount||1)-1;var succ=Math.random()<0.20;if(succ){S.trainSuccess=(S.trainSuccess||0)+1;var add=0.1+Math.random()*0.1;c.trainSpeed+=add;if(c.trainSpeed>20)c.trainSpeed=20;if(S.trainSuccess>=3)unlock('lucky');alert('✨ 训练成功！速度提升至 '+getSpeed(c).toFixed(1));}else{S.trainFail=(S.trainFail||0)+1;if(S.trainFail>=3)unlock('unlucky');alert('💨 训练失败，速度没有提升。');}sv();render()}
+function setHead(id){var c=findC(id);if(!c)return;if(S.head===id)return;if(!isH(c)||c.var){alert('这匹马不能当首马');return}if(S.a.indexOf(c)>=0){alert('档案里的马不能当首马');return}if(S.head){var cur=findC(S.head);if(cur){if(!cur.sterile&&cur.bc<getMaxBc(cur)){alert('当前首马需用完所有繁育次数才能更换');return}if(getSpeed(cur)<20){alert('当前首马速度满 20 才能更换');return}var idx=-1;for(var i=0;i<S.c.length;i++)if(S.c[i].id===S.head){idx=i;break}if(idx>=0){var oc=S.c.splice(idx,1)[0];oc.isRetiredHead=true;S.a.push(oc);unlock('archived')}}}S.head=id;completeGuideTask('g1');S.headTerm=(S.headTerm||0)+1;c.headTerm=S.headTerm;c.raceCount=c.raceCount||0;S.headStart=Date.now();S.headRace=0;S.headLastTick=Date.now();unlock('head');sv();closeM();render()}
+function trainHead00(){if(!S.head)return;var c=findC(S.head);if(!c)return;if(getSpeed(c)>=20){alert('头马已满级，无需训练。');return}if((S.hoof||0)<20){alert('马蹄铁不够！当前只有 '+(S.hoof||0)+' 个，特训需要 20 个。');return}if((S.trainCount||0)<=0){alert('本周期特训次数已用尽，请等待商店刷新！');return}S.hoof-=20;S.trainCount=(S.trainCount||1)-1;var succ=Math.random()<0.20;if(succ){S.trainSuccess=(S.trainSuccess||0)+1;var add=0.1+Math.random()*0.1;c.trainSpeed+=add;if(c.trainSpeed>20)c.trainSpeed=20;if(S.trainSuccess>=3)unlock('lucky');alert('✨ 训练成功！速度提升至 '+getSpeed(c).toFixed(1));}else{S.trainFail=(S.trainFail||0)+1;if(S.trainFail>=3)unlock('unlucky');alert('💨 训练失败，速度没有提升。');}
+ completeGuideTask('g16');updateDailyTaskProgress('train', 1);sv();render()}
 function getRaceCd(c){if(c&&c.sterile)return 900000;return RACE_CD}
 
 function raceHead(){
@@ -3729,9 +5138,10 @@ function raceHead(){
   var speed=getSpeed(c);
   var reward=Math.max(20,Math.round(charm*speed*1.25));
   
-  S.r+=reward;
+  S.r+=reward;completeGuideTask('g2');updateDailyTaskProgress('race', 1);
   S.headRace=Date.now();
   c.raceCount=(c.raceCount||0)+1;
+  if(c.raceCount >= 3) completeGuideTask('g14');
   unlock('race');
   S.headRaceCount=(S.headRaceCount||0)+1;
   
@@ -3890,6 +5300,7 @@ function cleanExhaustedHorses(){
       S.c = S.c.filter(function(c){ return ids.indexOf(c.id) < 0; });
       S.sel = S.sel.filter(function(id){ return ids.indexOf(id) < 0; });
       S._batchSel = S._batchSel.filter(function(id){ return ids.indexOf(id) < 0; });
+      completeGuideTask('g20');
       sv();
       resetFilters(); // 清理完毕，取消筛选
       alert('清理完毕！');
@@ -3933,6 +5344,7 @@ function quickSave() {
     document.body.removeChild(a);
     setTimeout(function(){URL.revokeObjectURL(url)}, 2000);
     showToast('⚡ 极速存档已下载！');
+    completeGuideTask('g19');
   } catch(e) {
     alert('下载失败，请尝试使用其他浏览器');
   }
@@ -3980,3 +5392,214 @@ setTimeout(function() {
     }
   });
 }, 1000); // 延迟1秒等DOM加载完毕再挂载
+
+// ==========================================
+// 🛠️ 终极全覆盖：任务系统核心逻辑 (放置在文件最底部，覆盖所有旧逻辑)
+// ==========================================
+
+// 1. 获取当前新手任务
+function getCurrentGuideTask() {
+  for (var i = 0; i < GUIDE_TASKS.length; i++) {
+    if (S.guide.tasks[GUIDE_TASKS[i].id] !== true) {
+      return GUIDE_TASKS[i];
+    }
+  }
+  return null; 
+}
+
+// 2. 领取新手任务奖励（之前找不到的就是这个）
+function claimGuideReward(taskId) {
+  if (S.guide.tasks[taskId] !== 'done') return;
+  
+  var rewards = {
+    g1: {r:100}, g2: {r:100}, g3: {r:100}, g4: {c:1}, g5: {r:100},
+    g6: {r:100}, g7: {c:1}, g8: {r:100}, g9: {r:100}, g10: {c:1},
+    g11: {r:50}, g12: {r:50}, g13: {c:1}, g14: {r:500}, g15: {c:1},
+    g16: {h:20}, g17: {h:50}, g18: {c:1}, g19: {p:50}, g20: {r:100}, g21: {c:5}
+  };
+  
+  var rw = rewards[taskId];
+  if (rw.r) S.r += rw.r;
+  if (rw.c) S.crystal += rw.c;
+  if (rw.h) S.hoof += rw.h;
+  if (rw.p) S.points += rw.p;
+  
+  S.guide.tasks[taskId] = true;
+  showToast('🎁 奖励已领取！');
+  
+  if (getCurrentGuideTask() === null) {
+    S.guide.completed = true;
+    setTimeout(function(){ alert('🎉 恭喜你完成了所有新手引导！'); }, 500);
+  }
+  
+  sv();
+  mkTaskHallUI(); // 🌟 立刻重绘任务大厅
+  render('top');   // 刷新顶部货币
+}
+
+// 3. 领取每日任务奖励
+function claimDailyTask(idx) {
+  if (!S.dailyTasks) return;
+  var task = S.dailyTasks[idx];
+  if (!task || task.claimed || task.progress < task.target) return;
+  
+  task.claimed = true; 
+  S.crystal += task.reward;
+  
+  sv(); 
+  mkTaskHallUI(); // 🌟 立刻重绘任务大厅
+  render('top');  // 刷新顶部货币
+  showToast('🎁 领取成功，获得 ' + task.reward + ' 💎');
+}
+
+// 4. 增加每日任务进度
+function updateDailyTaskProgress(type, amount) {
+  if (!S.dailyTasks) return;
+  var changed = false;
+  for (var i = 0; i < S.dailyTasks.length; i++) {
+    var task = S.dailyTasks[i];
+    if (!task.claimed && task.type === type && task.progress < task.target) {
+      task.progress += amount;
+      if (task.progress > task.target) task.progress = task.target;
+      changed = true;
+    }
+  }
+  if (changed) { 
+    sv(); 
+    mkTaskHallUI(); // 🌟 立刻重绘任务大厅
+  }
+}
+
+// 5. 完成新手任务打钩
+function completeGuideTask(taskId) {
+  if (!S.guide.started || S.guide.completed) return;
+  var currentTask = getCurrentGuideTask();
+  if (!currentTask || currentTask.id !== taskId || S.guide.tasks[taskId] !== undefined) return; 
+  
+  S.guide.tasks[taskId] = 'done';
+  sv();
+  mkTaskHallUI(); // 🌟 立刻重绘任务大厅
+  showToast('✨ 任务达成！请去任务大厅领取奖励。');
+}
+
+// 6. 开始新手引导
+function startGuide() {
+  S.guide.started = true;
+  sv(); 
+  closeM(); 
+  mkTaskHallUI(); // 🌟 立刻重绘任务大厅
+}
+
+// 7. 跳过新手引导
+function skipGuide() {
+  if(!confirm('⚠️ 确定要跳过新手引导吗？这将直接发放所有任务奖励（约1000🥕, 9💎, 70🧲, 50✨）。')) return;
+  S.guide.started = true;
+  S.guide.completed = true;
+  S.r += 1000; S.crystal += 9; S.hoof += 70; S.points += 50;
+  sv(); closeM(); 
+  mkTaskHallUI(); // 🌟 立刻重绘任务大厅
+  render('top');
+  showToast('🎁 已领取所有新手奖励！');
+}
+
+function breedWithRaffle(studData) {
+  var todayStr = new Date().toDateString();
+  if (S.raffleLastDate === todayStr) return alert('今天已经交配过了，请明天再来！');
+  if (S.raffleUsedCount >= 7) return alert('本周次数已用尽！');
+  if (S.crystal < 5) return alert('水晶币不足！');
+  
+  var validFemales = S.c.filter(function(c) { return c.sx === 'f' && isH(c) && !c.var && !c.sterile; });
+  if (validFemales.length === 0) return alert('你的马群中没有可用的成年雌性马匹！');
+  
+  var h = '<div class="mdt">选择母马 (与 ' + studData.name + ' 交配)</div>';
+  h += '<input id="raffleFSearch" class="breed-search" placeholder="搜索名字/代数" style="margin-bottom:10px;" oninput="renderRaffleFemaleList()">';
+  h += '<div id="raffleFList" style="max-height:300px; overflow-y:auto; margin-bottom:10px;"></div>';
+  h += '<button class="mc" onclick="closeM()">取消</button>';
+  showM(h);
+  
+  window._currentStudData = studData;
+  renderRaffleFemaleList();
+}
+// ==========================================
+// 🔍 查看抽奖种马详细基因弹窗
+// ==========================================
+function showRaffleGene() {
+  var currentWeek = getWeekNumber();
+  var studData = RAFFLE_STUDS[currentWeek % RAFFLE_STUDS.length];
+  
+  // 拿到专属颜色
+  var colorKey = S.raffleColor || 'grey_std';
+  var trio = CL[colorKey] || CL['grey_std'];
+  
+  var h = '<div class="mdt">🔍 ' + studData.name + ' · 属性图谱</div>';
+  
+  h += '<div style="text-align:center; margin-bottom: 12px;">';
+  h += '<div style="font-size:13px; font-weight:bold; color:var(--gold); margin-bottom:8px;">魅力值 30/30 </div>';
+  h += '</div>';
+  
+  // 🌟 渲染三同色板块
+  h += '<div style="color:var(--accent); font-weight:bold; margin-bottom:6px; border-bottom:1px solid var(--card-bd); padding-bottom:2px;">三同色</div>';
+  h += '<div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; margin-bottom:12px;">';
+
+ var renderColorBlock = function(partName) {
+  var parts = colorKey.split('_');
+  var famMap = {
+    rose:'红色', maroon:'红色', peach:'橙色', orange:'橙色', caramel:'橙色',
+    cream:'黄色', yellow:'黄色', mustard:'黄色', lime:'黄绿', pear:'黄绿', olive:'黄绿',
+    mint:'绿色', green:'绿色', forest:'绿色', aqua:'青绿', teal:'青绿', pine:'青绿',
+    ice:'青色', cyan:'青色', ocean:'青色', sky:'蓝色', blue:'蓝色', navy:'蓝色',
+    iris:'靛色', indigo:'靛色', night:'靛色', lilac:'紫色', purple:'紫色', plum:'紫色',
+    ruby:'品红', magenta:'品红', wine:'品红', sakura:'粉色', pink:'粉色', fuchsia:'粉色',
+    sand:'棕色', brown:'棕色', coffee:'棕色', silver:'灰色', grey:'灰色', charcoal:'灰色',
+    ash:'黑色', black:'黑色', ink:'黑色', snow:'白色', white:'白色', pearl:'白色'
+  };
+  var zoneMap = {light:'明亮', std:'标准', dark:'黑暗'};
+  
+  var fam = famMap[parts[0]] || '未知';
+  var zone = zoneMap[parts[1]] || '标准';
+
+  return '<div style="background:var(--inner-bg); padding:6px; border-radius:4px; border:1px solid var(--inner-bd); min-width:0;">' +
+         '<div style="display:flex; align-items:center; font-weight:bold; font-size:12px; color:var(--page-fg); overflow:hidden;">' +
+         '<span style="display:inline-block; width:10px; height:10px; background:' + trio[1] + '; border:1px solid #000; border-radius:1px; margin-right:4px; flex-shrink:0;"></span>' + 
+         '<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + trio[0] + '</span>' +
+         '</div>' +
+         // 🌟 去掉了 nowrap 允许换行，并把 partName 放前面
+         '<div style="font-size:10px; color:var(--page-dim); margin-top:4px; line-height:1.3; word-break:break-all;">' + partName + '：' + fam + '-' + zone + '</div>' +
+         '</div>';
+};
+  
+  h += renderColorBlock('体色');
+  h += renderColorBlock('翼色');
+  h += renderColorBlock('尾色');
+  h += '</div>';
+
+  // 渲染基因属性格子
+  h += '<div style="color:var(--accent); font-weight:bold; margin-bottom:6px; border-bottom:1px solid var(--card-bd); padding-bottom:2px;">部件基因</div>';
+  h += '<div style="background:var(--card-bg-solid); border:1px solid var(--card-bd); border-radius:6px; padding:10px; margin-bottom:12px;">';
+  h += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px;">';
+  
+  var partsList = ['eye','bod','win','tai','hor','leg'];
+  for(var i=0; i<partsList.length; i++){
+    var pk = partsList[i];
+    var opt = fo(pk, studData.g[pk]);
+    h += '<div style="display:flex; justify-content:space-between; background:var(--inner-bg); padding:6px; border-radius:4px;">';
+    h += '<span>' + P[pk].n + '：' + opt.n + '</span>';
+    h += '<span style="color:var(--rar-e); font-weight:bold;">罕见</span>';
+    h += '</div>';
+  }
+  h += '</div></div>';
+  
+  h += '<button class="mc" onclick="closeM()">关闭</button>';
+  
+  showM(h);
+}
+// ==========================================
+// 🎲 抽奖种马依赖：获取当前是第几周
+// ==========================================
+function getWeekNumber() {
+  var d = new Date(); 
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  var week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}

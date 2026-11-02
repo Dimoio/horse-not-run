@@ -1314,6 +1314,7 @@ html[data-theme="dark"] {
   --temp-breed-fg: #a0e0a0;
   --induce-herm-fg: #ff8ac4;
   --redragon-fg: #e05a7a;
+  --diamond-fg: #4ae3ff;
 }
 
 html[data-theme="light"] {
@@ -1348,6 +1349,7 @@ html[data-theme="light"] {
   --st-ready: #1a5a35;
   --st-used: #8a2040;
   --sterile: #a03a3a;
+  --diamond-fg: #005f73;
 }
 
 /* 组件挂变量 */
@@ -1821,4 +1823,10 @@ body > details {
   #breedM, #breedF { min-height: 200px; }
   #arc, #dex, #ach { min-height: 200px; }
   .store-main { min-height: 300px; }
+}
+
+@keyframes dailyPulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(0, 229, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0); }
 }
