@@ -4773,20 +4773,82 @@ if(cdEnded) {
   }
 }
 function togSel(id){var c=findC(id);if(!c||!isB(c))return;if(S.a.indexOf(c)>=0)return;var i=S.sel.indexOf(id);if(i>=0)S.sel.splice(i,1);else{if(S.sel.length>=2)S.sel.shift();S.sel.push(id)}render('list')}
-function doBreed(isTest){if(S.sel.length!==2)return;var a=findC(S.sel[0]),b=findC(S.sel[1]);if(!a||!b||!isH(a)||!isH(b))return;if(a.var||b.var||(a.sterile&&!a.tempBreed)||(b.sterile&&!b.tempBreed))return;if(!canBW(a,b))return;if(!isTest&&(!canB(a)||!canB(b)))return;
-  if(!isTest&&S.c.filter(function(c){return!isH(c)}).length>=(S.eggCap||10)){alert('幼崽栏已满 ('+(S.eggCap||10)+'/'+(S.eggCap||10)+')，请等待孵化');return}
-  if(!isTest&&S.c.length>=S.cap){alert('马群已满');return}
-  var cost=Math.floor(Math.random()*2)+2;if(!isTest&&S.r<cost){alert('胡萝卜不够 (需要2-3根)');return}
-  var r=breed(a,b);var c=r.c,mus=r.mus;
-  if(isTest){c.hat=0;}else{var now=Date.now();if(a.tempBreed){a.tempBreed=false;}else{a.bc++;}if(b.tempBreed){b.tempBreed=false;}else{b.bc++;}a.cd=now+cdTime(a);b.cd=now+cdTime(b);S.r-=cost;if(c.mut==='albino')unlock('bAlbino');
-  if(c.mut==='cow')unlock('cow_first');
-if(c.mut==='zebra')unlock('zebra_first');if(c.mut==='melanor')unlock('bMelanor');if(c.pie)unlock('bPie')}S.c.push(c);if(child.mut==='cow')unlock('cow_first');
-if(child.mut==='zebra')unlock('zebra_first');if(!isTest) updateDailyTaskProgress('breed', 1);S.last=c;S.lastM=mus;mkDex(c);checkAch(c,mus,a,b);checkGlobalAch();var tRate=TWIN_RATE;if(a.doubleWomb||b.doubleWomb)tRate=0.10;if(!isTest&&Math.random()<tRate)
-    {var c2,mus2;
-      if(Math.random()<0.5){c2=JSON.parse(JSON.stringify(c));c2.id=uid();c2.hid=genHorseHid(S.farmId, collectAllHids());mus2=mus.slice()}
-      else{
-      var r2=breed(a,b);c2=r2.c;c2.hat=0;mus2=r2.mus}S.c.push(c2);mkDex(c2);checkAch(c2,mus2,a,b);unlock('twin')}S.sel=[];sv();render()}
-function toggleDisplayMode() {
+function doBreed(isTest) {
+  if (S.sel.length !== 2) return;
+  var a = findC(S.sel[0]), b = findC(S.sel[1]);
+  if (!a || !b || !isH(a) || !isH(b)) return;
+  if (a.var || b.var || (a.sterile && !a.tempBreed) || (b.sterile && !b.tempBreed)) return;
+  if (!canBW(a, b)) return;
+  if (!isTest && (!canB(a) || !canB(b))) return;
+  
+  if (!isTest && S.c.filter(function(c) { return !isH(c) }).length >= (S.eggCap || 10)) {
+    alert('幼崽栏已满 (' + (S.eggCap || 10) + '/' + (S.eggCap || 10) + ')，请等待孵化');
+    return;
+  }
+  if (!isTest && S.c.length >= S.cap) { alert('马群已满'); return; }
+  
+  var cost = Math.floor(Math.random() * 2) + 2;
+  if (!isTest && S.r < cost) { alert('胡萝卜不够 (需要2-3根)'); return; }
+  
+  var r = breed(a, b);
+  var c = r.c, mus = r.mus;
+  
+  if (isTest) {
+    c.hat = 0;
+  } else {
+    var now = Date.now();
+    if (a.tempBreed) { a.tempBreed = false; } else { a.bc++; }
+    if (b.tempBreed) { b.tempBreed = false; } else { b.bc++; }
+    a.cd = now + cdTime(a);
+    b.cd = now + cdTime(b);
+    S.r -= cost;
+    
+    // 🌟 成就解锁
+    if (c.mut === 'albino') unlock('bAlbino');
+    if (c.mut === 'melanor') unlock('bMelanor');
+    if (c.pie) unlock('bPie');
+    if (c.mut === 'cow') unlock('cow_first');     // 奶牛成就
+    if (c.mut === 'zebra') unlock('zebra_first'); // 斑马成就
+  }
+  
+  S.c.push(c);
+  if (!isTest) updateDailyTaskProgress('breed', 1);
+  
+  S.last = c;
+  S.lastM = mus;
+  mkDex(c);
+  checkAch(c, mus, a, b);
+  checkGlobalAch();
+  
+  // 双胞胎判定
+  var tRate = TWIN_RATE;
+  if (a.doubleWomb || b.doubleWomb) tRate = 0.10;
+  
+  if (!isTest && Math.random() < tRate) {
+    var c2, mus2;
+    if (Math.random() < 0.5) {
+      c2 = JSON.parse(JSON.stringify(c));
+      c2.id = uid();
+      c2.hid = genHorseHid(S.farmId, collectAllHids());
+      mus2 = mus.slice();
+    } else {
+      var r2 = breed(a, b);
+      c2 = r2.c;
+      c2.hat = 0;
+      mus2 = r2.mus;
+    }
+    S.c.push(c2);
+    mkDex(c2);
+    checkAch(c2, mus2, a, b);
+    unlock('twin');
+  }
+  
+  S.sel = [];
+  sv();
+  render();
+}
+
+      function toggleDisplayMode() {
   showToast('🔄 正在重构界面...');
   setTimeout(function() {
     S.displayMode = S.displayMode === 'color' ? 'text' : 'color';
