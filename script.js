@@ -53,6 +53,9 @@ raffleLastDate: S.raffleLastDate,
   raffleStash: S.raffleStash,
     raffleStashTime: S.raffleStashTime,
       raffleToastClosed: S.raffleToastClosed,
+       magicFlower: S.magicFlower,
+       hc: S._hc,
+
   };
 }
 function sv(){
@@ -62,6 +65,7 @@ function sv(){
 function ld(){var r=null;if(ok){try{r=localStorage.getItem(KEY)}catch(e){}}else if(ms)return al(ms);if(!r)return false;try{return al(JSON.parse(r))}catch(e){return false}}
 // 🌟 万能洗刷函数：不管哪里来的马，全在这里补全字段，以后加字段只改这里！
 function fixHorse(c, existingHids) {
+   if (c.infiniteBreed === undefined) c.infiniteBreed = false;
   if (!c) return c;
   
   // 补全 ID 和 马场信息
@@ -196,6 +200,8 @@ S.lastDailyRefreshDate = d.lastDailyRefreshDate || '';
  S.raffleStash = d.raffleStash || null;
   S.raffleStashTime = d.raffleStashTime || 0;
    S.raffleToastClosed = d.raffleToastClosed || false;
+    S.magicFlower = d.magicFlower || 0;
+    S._hc = d._hc || 0;
   
   S.c = d.c || [];
   S.a = d.a || [];
@@ -353,7 +359,8 @@ var ACHS = [
   { id: 'bPie', n: '派！', d: '繁殖诞生斑点突变' },
   { id: 'penny', n: '在月亮的另一面，有六枚便士', d: '解锁缄默商店' }, 
    { id: 'cow_first', n: '牛头马面', d: '繁殖诞生奶牛突变' },
-  { id: 'zebra_first', n: '看！斑马！', d: '繁殖诞生条纹突变' }
+  { id: 'zebra_first', n: '看！斑马！', d: '繁殖诞生条纹突变' },
+  { id: 'all_things_birth', n: 'All Things Birth『万物生』', d: '繁育出一只不育双子宫马（必定为雌雄同体）', hidden: true }
 ];
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 var ID_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -415,8 +422,18 @@ function isB(c){return!c.var&&isH(c)}
 function calcHatchTime(c){var charm=rS(c);if(charm<1)charm=1;var mins=charm;if(c.mut==='albino'||c.mut==='melanor'||c.pie){mins=mins*2}return mins*60000}
 function cdTime(c){var base;var s=rS(c);if(s<11)base=600000;else if(s<21)base=1200000;else base=1800000;if(c.doubleWomb)base=Math.floor(base/2);return base}
 function getMaxBc(c){return c.doubleWomb?10:MBC}
-function canB(c){if(c.var)return false;if(c.sterile&&!c.tempBreed)return false;if(c.tempBreed)return c.cd<=Date.now();return c.bc<getMaxBc(c)&&c.cd<=Date.now()}
-function stTx(c){if(!isH(c)){var s=Math.ceil((c.hat-Date.now())/1000);return{text:'孵化 '+s+'s',cls:'hatch'}}if(c.var)return{text:'变异体·不可繁殖',cls:'used'};if(c.sterile&&!c.tempBreed)return{text:'不育·不可繁殖',cls:'used'};if(c.tempBreed)return{text:'临时繁育 1/1',cls:'ready'};if(c.bc>=getMaxBc(c))return{text:'已用尽',cls:'used'};if(c.cd>Date.now()){var s2=Math.ceil((c.cd-Date.now())/1000);return{text:'冷却 '+Math.floor(s2/60)+':'+String(s2%60).replace(/^(\d)$/,'0$1'),cls:'cool'}}return{text:'可繁育 '+(getMaxBc(c)-c.bc)+'/'+getMaxBc(c),cls:'ready'}}
+function canB(c) {
+  if (c.var) return false;
+  // 如果是无限繁育，直接无视不育和次数限制
+  if (c.infiniteBreed) return c.cd <= Date.now();
+  if (c.sterile && !c.tempBreed) return false;
+  if (c.tempBreed) return c.cd <= Date.now();
+  return c.bc < getMaxBc(c) && c.cd <= Date.now();
+}
+function stTx(c){if(!isH(c)){var s=Math.ceil((c.hat-Date.now())/1000);return{text:'孵化 '+s+'s',cls:'hatch'}}if(c.var)return{text:'变异体·不可繁殖',cls:'used'};if(c.sterile&&!c.tempBreed)return{text:'不育·不可繁殖',cls:'used'};if(c.tempBreed)return{text:'临时繁育 1/1',cls:'ready'};
+ if (c.infiniteBreed) return { text: '可繁育 ∞', cls: 'ready' };
+  if (c.bc >= getMaxBc(c)) return { text: '已用尽', cls: 'used' };
+if(c.cd>Date.now()){var s2=Math.ceil((c.cd-Date.now())/1000);return{text:'冷却 '+Math.floor(s2/60)+':'+String(s2%60).replace(/^(\d)$/,'0$1'),cls:'cool'}}return{text:'可繁育 '+(getMaxBc(c)-c.bc)+'/'+getMaxBc(c),cls:'ready'}}
 // ==== breed 1.21 遗传矩阵 ====
 function breed(a, b) {
   var g = {}, mus = [];
@@ -1323,10 +1340,11 @@ function renderRaffleFemaleList() {
   var q = $('raffleFSearch') ? $('raffleFSearch').value.trim().toLowerCase() : '';
   
   var validFemales = S.c.filter(function(c) { 
-    if (c.sx !== 'f' || !isH(c) || c.var || c.sterile) return false;
+    // 🌟 加上 canB(c) 判断，耗尽的、冷却中的、不育的、变异的统统踢出去
+if (c.sx !== 'f' || !isH(c) || !canB(c)) return false;
     if (q) {
       var nm = (c.name || '').toLowerCase(), gn = String(c.gen);
-      if (nm.indexOf(q) < 0 && gn.indexOf(q) < 0) return false;
+      if (nm.indexOf(q) < 0 && gn !== q && gn !== q.replace(/代/g, '').trim()) return false;
     }
     return true;
   });
@@ -1360,12 +1378,14 @@ function renderRaffleFemaleList() {
 }
 
 function executeRaffleBreed(female, studData) {
+   // 🌟 核心防呆：如果没有繁育次数，直接踢回去
+  if (!canB(female)) return alert('该母马已无繁育次数或正在冷却中！');
   var todayStr = new Date().toDateString();
   if (S.crystal < 5) return alert('水晶币不足！');
   if (S.raffleLastDate === todayStr) return alert('今天已经交配过了，请明天再来！');
   if (S.raffleUsedCount >= 7) return alert('本周次数已用尽！');
+  if (!canB(female)) return alert('该母马已无繁育次数或正在冷却中！');
   
-  // 强行赋予该存档专属的三同色
   var male = fixHorse(Object.assign({}, studData, {
     hat: 0, isLocked: true, hid: 'RAFFLE_' + getWeekNumber() + '_' + uid(), bc: 0, cd: 0,
     g: Object.assign({}, studData.g, { col: S.raffleColor, wingCol: S.raffleColor, tailCol: S.raffleColor })
@@ -1375,14 +1395,17 @@ function executeRaffleBreed(female, studData) {
   var child = r.c;
   if (studData.specialTrait) child.specialT = studData.specialTrait;
   
-  // 🌟 核心修复：扣除母马的次数并进入冷却
   var now = Date.now();
-  if (female.tempBreed) {
-    female.tempBreed = false; // 消耗临时繁育机会
-  } else {
-    female.bc++; // 正常扣除繁育次数
+  
+  // 🌟 核心：扣除母马次数（加入魔法花判定）
+  if (!female.infiniteBreed) {
+    if (female.tempBreed) {
+      female.tempBreed = false; 
+    } else {
+      female.bc++; 
+    }
   }
-  female.cd = now + cdTime(female); // 设置冷却时间
+  female.cd = now + cdTime(female); 
 
   S.c.push(child);
   mkDex(child);
@@ -1392,6 +1415,8 @@ function executeRaffleBreed(female, studData) {
   
   completeGuideTask('g4'); 
   updateDailyTaskProgress('breed', 1);
+  
+  if (child.sterile && child.doubleWomb && child.sx === 'h') unlock('all_things_birth');
   
   sv(); closeM(); render();
   alert('🥚 交配成功！生下了一枚蕴含特殊力量的蛋。');
@@ -1730,19 +1755,28 @@ lastDailyRefreshDate: '',
  raffleStash: null,
   raffleStashTime: 0,
   raffleToastClosed: false,
+   magicFlower: 0,
 };
 function findC(id){for(var i=0;i<S.c.length;i++)if(S.c[i].id===id)return S.c[i];for(var j=0;j<S.a.length;j++)if(S.a[j].id===id)return S.a[j];return null}
 function unlock(id) {
   if (S.ach[id]) return;
+  
+  // 🌟 核心彩蛋特殊处理
+  if (id === 'all_things_birth') {
+    S.ach[id] = Date.now();
+    S.magicFlower = (S.magicFlower || 0) + 1;
+    sv();
+    showToast('🌸 你发现了一个beta彩蛋！获得特殊道具：魔法花 x1', true);
+    render(); // 刷新一下UI，让成就图标亮起
+    return;
+  }
+
   S.ach[id] = Date.now();
   S.points += 5;
   
   var ac = null;
   for (var i = 0; i < ACHS.length; i++) {
-    if (ACHS[i].id === id) {
-      ac = ACHS[i];
-      break;
-    }
+    if (ACHS[i].id === id) { ac = ACHS[i]; break; }
   }
   if (ac) showToast('🏆 解锁成就：' + ac.n + ' (+5 荧光点)');
 }
@@ -1911,7 +1945,7 @@ function checkGlobalAch() {
   }
 }
 function mkDex(c){if(!isH(c)||c.var)return false;var sg=sig(c.g);if(!S.d[sg]){S.d[sg]={g:Object.assign({},c.g),id:c.id,t:Date.now()};return true}return false}
-function filterList(){var elName=$('sName'),elSex=$('sSex'),elCol=$('sColor'),elMut=$('sMut');var n=elName?elName.value.trim().toLowerCase():'';var sx=elSex?elSex.value:'';var col=elCol?elCol.value:'';var mut=elMut?elMut.value:'';var arr=S.c.filter(function(c){if(!isH(c))return false;if(sx==='exhausted'){if(c.bc<getMaxBc(c))return false;if(c.var)return false}else if(sx){if(c.sx!==sx)return false}if(col&&c.g.col!==col)return false;if(mut){if(mut==='any'){if(!c.mut&&!c.pie&&!c.firefly&&!c.sterile&&!c.doubleWomb)return false}else if(mut==='pie'){if(!c.pie)return false}else if(mut==='firefly'){if(!c.firefly)return false}else if(mut==='sterile'){if(!c.sterile)return false}else if(mut==='doubleWomb'){if(!c.doubleWomb)return false}else{if(c.mut!==mut)return false}}if(n){var name=(c.name||'').toLowerCase();var gen=String(c.gen);if(name.indexOf(n)<0&&gen.indexOf(n)<0)return false}return true});arr.sort(function(a,b){return rSFull(b)-rSFull(a)});return arr}
+function filterList(){var elName=$('sName'),elSex=$('sSex'),elCol=$('sColor'),elMut=$('sMut');var n=elName?elName.value.trim().toLowerCase():'';var sx=elSex?elSex.value:'';var col=elCol?elCol.value:'';var mut=elMut?elMut.value:'';var arr=S.c.filter(function(c){if(!isH(c))return false;if(sx==='exhausted'){if(c.bc<getMaxBc(c))return false;if(c.var)return false}else if(sx){if(c.sx!==sx)return false}if(col&&c.g.col!==col)return false;if(mut){if(mut==='any'){if(!c.mut&&!c.pie&&!c.firefly&&!c.sterile&&!c.doubleWomb)return false}else if(mut==='pie'){if(!c.pie)return false}else if(mut==='firefly'){if(!c.firefly)return false}else if(mut==='sterile'){if(!c.sterile)return false}else if(mut==='doubleWomb'){if(!c.doubleWomb)return false}else{if(c.mut!==mut)return false}}if(n){var name=(c.name||'').toLowerCase();var gen=String(c.gen);if(name.indexOf(n)<0 && gen !== n && gen !== n.replace(/代/g, '').trim()) return false}return true});arr.sort(function(a,b){return rSFull(b)-rSFull(a)});return arr}
 function buyHoofPotion(t, count) {
   count = count || 1;
   var pr = t === 'hfan' ? 50 : t === 'hfeng' ? 50 : t === 'hmix' ? 70 : t === 'hdrag' ? 100 : 200;
@@ -1973,7 +2007,7 @@ function render00SelectList(idx) {
     if(q){
       var name = (c.name||'').toLowerCase();
       var gen = String(c.gen);
-      if(name.indexOf(q) < 0 && gen.indexOf(q) < 0) return false;
+      if(name.indexOf(q) < 0 && gen !== q && gen !== q.replace(/代/g, '').trim()) return false;
     }
     return true;
   });
@@ -2934,6 +2968,13 @@ if(c.currentFarmId) {
     bcStr = '<span style="color:var(--st-hatch)">孵化中（尚不可繁育）</span>';
   } else if (c.var) {
     bcStr = '<span style="color:var(--st-used)">变异体（不可繁育）</span>';
+    } else if (c.infiniteBreed) {
+    // 🌟 详情页不显示跳秒，只显示当前状态
+    if (c.cd > Date.now()) {
+      bcStr = '<span style="color:var(--st-cool)">冷却中 (无限繁育)</span>';
+    } else {
+      bcStr = '<span style="color:var(--gold); font-weight:bold;">可无限繁育 (∞)</span>';
+    }
   } else if (c.sterile && !c.tempBreed) {
     bcStr = '<span style="color:var(--st-used)">不育（不可繁育）</span>';
   } else if (c.tempBreed) {
@@ -2941,7 +2982,6 @@ if(c.currentFarmId) {
   } else {
     var remBc = getMaxBc(c) - c.bc;
     var maxBc = getMaxBc(c);
-    // 如果还有次数显示绿色，没了显示红色
     var bcColor = remBc > 0 ? 'var(--st-ready)' : 'var(--st-used)';
     bcStr = '<span style="color:'+bcColor+'">剩余繁育：' + remBc + ' / ' + maxBc + '</span>';
   }
@@ -2978,8 +3018,19 @@ h += buildPedigreeHtml(c);
   if(S.p.dispel>0&&(c.mut||c.pie||c.firefly||c.sterile||c.doubleWomb))h+='<button onclick="useP(\''+id+'\',\'dispel\')">💧 消融魔药 ('+S.p.dispel+')</button>';
   
   if(!inArc&&!isEgg){
-    if(c.sx!=='m'&&!c.induceHerm&&S.p.i>0&&c.bc<getMaxBc(c))h+='<button onclick="useP(\''+id+'\',\'i\')">🍷 诱变魔药 ('+S.p.i+')</button>';
-    if(c.doubleWomb&&c.bc>=10&&!c.usedHfan&&S.p.hfan>0)h+='<button onclick="useP(\''+id+'\',\'hfan\')">🔥 狂热魔药 ('+S.p.hfan+')</button>';
+      if(c.sx!=='m'&&!c.induceHerm&&S.p.i>0&&c.bc<getMaxBc(c)&&!(c.sterile&&!c.tempBreed))h+='<button onclick="useP(\''+id+'\',\'i\')">🍷 诱变魔药 ('+S.p.i+')</button>';
+   // 🌟 核心修复：狂热魔药的智能 UI 提示
+    if (c.doubleWomb) {
+      if (c.bc >= getMaxBc(c)) {
+        if (c.usedHfan) {
+          h += '<button disabled style="opacity:0.5; cursor:not-allowed;">🔥 狂热魔药 (本马已使用过)</button>';
+        } else if (S.p.hfan > 0) {
+          h += '<button onclick="useP(\''+id+'\',\'hfan\')">🔥 狂热魔药 ('+S.p.hfan+')</button>';
+        } else {
+          h += '<button disabled style="opacity:0.5; cursor:not-allowed;">🔥 狂热魔药 (库存不足)</button>';
+        }
+      }
+    }
     if(c.sterile&&!c.usedHfeng&&S.p.hfeng>0)h+='<button onclick="useP(\''+id+'\',\'hfeng\')">🌾 丰饶魔药 ('+S.p.hfeng+')</button>';
     if(S.p.hmix>0)h+='<button onclick="useP(\''+id+'\',\'hmix\')">🎲 混合药剂 ('+S.p.hmix+')</button>';
     if(isHead&&S.p.hdrag>0&&!c.tempCharmBonus)h+='<button onclick="useP(\''+id+'\',\'hdrag\')">🩸 红龙之血 ('+S.p.hdrag+')</button>';
@@ -3013,6 +3064,10 @@ if (otherGroups.length > 0 && !isHead) {
   
   h += '</div></details>';
 }
+ // 🌟 魔法花专属判定
+    if (c.sterile && c.doubleWomb && !c.infiniteBreed && S.magicFlower > 0) {
+       h += '<button onclick="useMagicFlower(\''+id+'\')" style="animation: pulse 1.5s infinite; background: var(--card-bg-solid); border: 2px solid var(--mut); color: var(--mut); font-weight: bold; width: 100%; padding: 10px; border-radius: 4px; margin-bottom: 6px;">🌸 使用魔法花 (赋予无限繁育)</button>';
+    }
     if(!c.var&&!isHead)h+='<button onclick="archive(\''+id+'\')">📌 保存到永久档案</button>';
   }
   
@@ -3180,7 +3235,8 @@ function useP(id, t) {
     S.p.v--;
     c.var = pk(VT);
    } else if (t === 'i') {
-    if (S.p.i <= 0 || c.sx === 'm' || c.induceHerm || c.bc >= getMaxBc(c)) return;
+     if (S.p.i <= 0 || c.sx === 'm' || c.induceHerm || c.bc >= getMaxBc(c)) return;
+    if (c.sterile && !c.tempBreed) return; // 🌟 终极防呆：不育且无临时次数，直接掐断
     S.p.i--;
     c.induceHerm = true;
   } else if (t === 'fire') {
@@ -3302,6 +3358,12 @@ function rmC(id){
   if(target && target.isLocked) {
     return alert('🔒 该马匹已锁定，无法删除！请先点击 ⋯ 菜单解锁。');
   }
+  
+  // 🌟 新增：如果删除的是未孵化的蛋，同步扣减历史记录，防止被误算作孵化
+  if (target && !isH(target)) {
+    S._hc = Math.max(0, S._hc - 1);
+  }
+
   S.c=S.c.filter(function(c){return c.id!==id});
   S.a=S.a.filter(function(c){return c.id!==id});
   S.sel=S.sel.filter(function(x){return x!==id});
@@ -3424,7 +3486,7 @@ if(speed>=20){
   
   var pots=ce('div');pots.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px';
   if(S.p.m>0&&!c.mut&&!c.pie){var bm=ce('button');bm.className='primary';bm.style.cssText='flex:1;font-size:12px;padding:6px';bm.textContent='🌟 突变药水('+S.p.m+')';bm.onclick=function(){useP(c.id,'m')};pots.appendChild(bm)}
-  if(c.sx!=='m'&&!c.induceHerm&&S.p.i>0&&c.bc<getMaxBc(c)){var bi=ce('button');bi.className='primary';bi.style.cssText='flex:1;font-size:12px;padding:6px;background:#c05a9a;border-color:#c05a9a';bi.textContent='🍷 诱变魔药('+S.p.i+')';bi.onclick=function(){useP(c.id,'i')};pots.appendChild(bi)}
+ if(c.sx!=='m'&&!c.induceHerm&&S.p.i>0&&c.bc<getMaxBc(c)&&!(c.sterile&&!c.tempBreed)){var bi=ce('button');bi.className='primary';bi.style.cssText='flex:1;font-size:12px;padding:6px;background:#c05a9a;border-color:#c05a9a';bi.textContent='🍷 诱变魔药('+S.p.i+')';bi.onclick=function(){useP(c.id,'i')};pots.appendChild(bi)}
   if(pots.children.length>0)box.appendChild(pots);
   
   var bw=ce('div');bw.className='head-actions';
@@ -3743,19 +3805,28 @@ function mkCard(c){
     var bcHtml = '';
     if (inArc) {
       bcHtml = '归档';
-    } else if (c.sterile && !c.tempBreed) {
-      bcHtml = '<span style="color:var(--sterile)">不育</span>';
+    } else if (c.cd > Date.now()) {
+      // 🌟 优先判断冷却：只要在冷却，不管有没有无限繁育，都显示冷却
+      bcHtml = '<span style="color:var(--sterile)">冷却 ' + Math.ceil((c.cd - Date.now()) / 60000) + 'm</span>';
+     } else if (c.infiniteBreed) {
+      // 🌟 极度干净的无限符号，完全交给 flex 来居中
+      bcHtml = '<span style="color:var(--gold); font-weight:bold; font-size:18px; line-height:1;">∞</span>';
+      } else if (c.sterile) {
+      // 🌟 只有涉及“不育”时才特判。单纯的双子宫会直接落到最底下的 else，显示 10/10
+      if (c.doubleWomb) {
+        bcHtml = '<span style="color:var(--sterile); font-weight:bold;">双重</span>';
+      } else {
+        bcHtml = '<span style="color:var(--sterile)">不育</span>';
+      }
     } else if (c.tempBreed) {
       bcHtml = '<span style="color:var(--temp-breed-fg)">临时 1/1</span>';
-    } else if (c.cd > Date.now()) {
-      bcHtml = '<span style="color:var(--sterile)">冷却 '+Math.ceil((c.cd-Date.now())/60000)+'m</span>';
     } else {
-      bcHtml = (getMaxBc(c)-c.bc)+'/'+getMaxBc(c);
+      bcHtml = (getMaxBc(c) - c.bc) + '/' + getMaxBc(c);
     }
 
     var rarHtml = '魅力 '+rSFull(c) + (hasRealVar ? ' <span style="color:var(--gold)">★</span>' : '');
     top.innerHTML = '<span style="color:var(--page-dim);font-size:10px;">第'+c.gen+'代</span>' +
-                    '<span class="bc">'+crownHtml+bcHtml+'</span>' +
+                    '<span class="bc" style="display:flex; align-items:center; justify-content:center; height:100%;">'+crownHtml+bcHtml+'</span>' +
                     '<span style="color:var(--page-dim);font-size:10px;">'+rarHtml+'</span>';
   }
   cd.appendChild(top);
@@ -3861,6 +3932,8 @@ cd.appendChild(nameRow);
       if(c.firefly) addTag('萤火虫', 'mut');
       if(c.sterile) addTag('不育', 'mut-red');
       if(c.doubleWomb) addTag('双子宫', 'mut');
+      if(c.sterile && c.doubleWomb) addTag('双重突变', 'mut'); // 顺便加个双重特供标签
+      if(c.infiniteBreed) addTag('无限繁育 ∞', 'mut');
       addTag((CL[c.g.col]||CL.n)[0]);
       addTag((CL[c.g.wingCol]||CL.n)[0]);
       addTag((CL[c.g.tailCol]||CL.n)[0]);
@@ -3886,10 +3959,22 @@ cd.appendChild(nameRow);
       var b2=ce('div');b2.className='mut-box'+(c.firefly?'':' empty');
       if(c.firefly){b2.style.background='#f1c40f';b2.style.boxShadow='0 0 5px #f1c40f';}
       b2.title=c.firefly?'二级：萤火虫':'二级：无'; mutCol.appendChild(b2);
+          var b3=ce('div');b3.className='mut-box'+((c.sterile||c.doubleWomb)?'':' empty');
+      if(c.sterile && c.doubleWomb) {
+        // 🌟 核心：135度斜杠，中间夹一条 4% 宽度的黑线
+        b3.style.background = 'linear-gradient(135deg, #e05a7a 48%, #222 48%, #222 52%, #c05a9a 52%)';
+      } else if(c.sterile) {
+        b3.style.background = '#e05a7a';
+      } else if(c.doubleWomb) {
+        b3.style.background = '#c05a9a';
+      }
       
-      var b3=ce('div');b3.className='mut-box'+((c.sterile||c.doubleWomb)?'':' empty');
-      if(c.sterile) b3.style.background='#e05a7a'; else if(c.doubleWomb) b3.style.background='#c05a9a';
-      b3.title=c.sterile?'三级：不育':c.doubleWomb?'三级：双子宫':'三级：无';
+      // 🌟 修复悬浮提示
+      if (c.infiniteBreed) b3.title = '三级：无限繁育 ∞';
+      else if (c.sterile && c.doubleWomb) b3.title = '三级：不育 + 双子宫';
+      else if (c.sterile) b3.title = '三级：不育';
+      else if (c.doubleWomb) b3.title = '三级：双子宫';
+      else b3.title = '三级：无';
       mutCol.appendChild(b3);
       bottom.appendChild(mutCol);
 
@@ -4595,6 +4680,9 @@ function mkAchUI() {
   for (var i = 0; i < ACHS.length; i++) {
     var ac = ACHS[i];
     var on = S.ach[ac.id];
+    // 🌟 隐藏成就未解锁时不显示
+    if (ac.hidden === true && !on) continue;
+    
     var el = ce('div');
     el.className = 'achi ' + (on ? 'on' : 'off');
     el.innerHTML = '<div class="an">' + (on ? '🏆 ' : '🔒 ') + ac.n + '</div><div class="ad">' + ac.d + '</div>';
@@ -4777,7 +4865,8 @@ function doBreed(isTest) {
   if (S.sel.length !== 2) return;
   var a = findC(S.sel[0]), b = findC(S.sel[1]);
   if (!a || !b || !isH(a) || !isH(b)) return;
-  if (a.var || b.var || (a.sterile && !a.tempBreed) || (b.sterile && !b.tempBreed)) return;
+  // 🌟 魔法花开后门：如果有 infiniteBreed，无视不育拦截
+  if (a.var || b.var || (!a.infiniteBreed && a.sterile && !a.tempBreed) || (!b.infiniteBreed && b.sterile && !b.tempBreed)) return;
   if (!canBW(a, b)) return;
   if (!isTest && (!canB(a) || !canB(b))) return;
   
@@ -4797,18 +4886,27 @@ function doBreed(isTest) {
     c.hat = 0;
   } else {
     var now = Date.now();
-    if (a.tempBreed) { a.tempBreed = false; } else { a.bc++; }
-    if (b.tempBreed) { b.tempBreed = false; } else { b.bc++; }
+    
+    // 🌟 核心：扣除次数（加入魔法花判定）
+    if (a.infiniteBreed) { /* 无限繁育，不扣次数 */ } 
+    else if (a.tempBreed) { a.tempBreed = false; } 
+    else { a.bc++; }
+    
+    if (b.infiniteBreed) { /* 无限繁育，不扣次数 */ } 
+    else if (b.tempBreed) { b.tempBreed = false; } 
+    else { b.bc++; }
+    
     a.cd = now + cdTime(a);
     b.cd = now + cdTime(b);
     S.r -= cost;
     
-    // 🌟 成就解锁
+    // 成就解锁
     if (c.mut === 'albino') unlock('bAlbino');
     if (c.mut === 'melanor') unlock('bMelanor');
     if (c.pie) unlock('bPie');
-    if (c.mut === 'cow') unlock('cow_first');     // 奶牛成就
-    if (c.mut === 'zebra') unlock('zebra_first'); // 斑马成就
+    if (c.mut === 'cow') unlock('cow_first');
+    if (c.mut === 'zebra') unlock('zebra_first');
+    if (c.sterile && c.doubleWomb && c.sx === 'h') unlock('all_things_birth');
   }
   
   S.c.push(c);
@@ -5182,8 +5280,8 @@ function clearGame(){
   
   // 全面重置所有状态，绝不残留！
   S.farmName = '我的马场';
-S.farmId = genFarmId();
-S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
+  S.farmId = genFarmId();
+  S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
   S.a = [];
   S.d = {};
   S.sel = [];
@@ -5213,20 +5311,36 @@ S.c = [newC(0,{inst:true}), newC(0,{inst:true}), newC(0,{inst:true})];
   S.headStart = 0;
   S.headRace = 0;
   S._dexOpen = {};
-  
-  // 重新生成初始马和商店
+  S.lastRescue = 0;
+  S.refreshData = { date: '', s01: 5, s00: 5 };
+
+  // 🌟 核心修复：把后来加的新系统全部清洗干净
+  S.crystal = 0;
+  S.guide = { started: false, completed: false, tasks: {} };
+  S.raffleColor = pk(CK); // 强制给一个全新的随机抽奖色
+  S.raffleWeek = 0;
+  S.raffleUsedCount = 0;
+  S.raffleLastDate = '';
+  S.raffleStash = null;
+  S.raffleStashTime = 0;
+  S.raffleToastClosed = false;
+  S.magicFlower = 0;
+  S.dailyTasks = null; // 置空，强制重新生成
+  S.dailyTaskResetTime = 0;
+  S.lastDailyRefreshDate = '';
+  S._hc = 0;
+
+  // 重新生成初始马、图鉴和商店
   for(var i=0; i<S.c.length; i++) mkDex(S.c[i]);
   mkStore(true);
-  if (!S.raffleColor) {
-  S.raffleColor = pk(CK); // 从 48 色中随机挑一个作为本存档的专属抽奖马颜色
-  sv();
-}
-initDailyTasks();
+  initDailyTasks(); // 重新生成每日任务
+  
   // 保存并刷新页面
   sv(); 
   closeM(); 
   render();
-   // 🌟 新增：清空存档后，自动检测是否需要弹新手引导
+  
+  // 重新触发新手引导
   setTimeout(checkGuidePopup, 500);
 }
 initColorSelect();
@@ -5281,7 +5395,7 @@ if(S.breedMutFilter) {
     if(q){
       var nm=(c.name||'').toLowerCase();
       var gn=String(c.gen);
-      if(nm.indexOf(q)<0&&gn.indexOf(q)<0)return false
+      if(nm.indexOf(q)<0 && gn !== q && gn !== q.replace(/代/g, '').trim()) return false
     }
     return true
   });
@@ -5359,13 +5473,13 @@ function mkBreedUI(){
   }
 
   // 🌟 核心优化：渲染列表函数。如果传了 updateOnly，就不重新画卡片
-  var renderList = function(updateOnly) {
-    var mArr=breedPool('M');
-    var fArr=breedPool('F');
-    
+ var renderList = function(updateOnly) {
     var mBox=$('breedM'), fBox=$('breedF');
     
     if (!updateOnly) {
+      var mArr=breedPool('M');
+      var fArr=breedPool('F');
+      
       mBox.innerHTML='';
       if(mArr.length===0) mBox.innerHTML='<div class="em" style="padding:6px">没有可用父本</div>';
       for(var i=0;i<mArr.length;i++) mBox.appendChild(mkBreedItem(mArr[i],S.selM,'M',S.selF));
@@ -5374,11 +5488,20 @@ function mkBreedUI(){
       if(fArr.length===0) fBox.innerHTML='<div class="em" style="padding:6px">没有可用母本</div>';
       for(var j=0;j<fArr.length;j++) fBox.appendChild(mkBreedItem(fArr[j],S.selF,'F',S.selM));
     } else {
-      // 只更新高亮状态
+      // 🌟 核心性能优化：不重绘，直接遍历 DOM，把对面的马隐藏掉！
       var itemsM = mBox.querySelectorAll('.breed-item');
-      for(var i=0;i<itemsM.length;i++) itemsM[i].classList.toggle('sel', itemsM[i].dataset.id === S.selM);
+      for(var i=0;i<itemsM.length;i++) {
+        var id = itemsM[i].dataset.id;
+        itemsM[i].style.display = (id === S.selF) ? 'none' : ''; // 如果是母本，父本列表直接隐藏它
+        itemsM[i].classList.toggle('sel', id === S.selM);
+      }
+      
       var itemsF = fBox.querySelectorAll('.breed-item');
-      for(var j=0;j<itemsF.length;j++) itemsF[j].classList.toggle('sel', itemsF[j].dataset.id === S.selF);
+      for(var j=0;j<itemsF.length;j++) {
+        var id = itemsF[j].dataset.id;
+        itemsF[j].style.display = (id === S.selM) ? 'none' : ''; // 如果是父本，母本列表直接隐藏它
+        itemsF[j].classList.toggle('sel', id === S.selF);
+      }
     }
   };
 
@@ -5393,32 +5516,67 @@ function mkBreedUI(){
     updateMidInfo();  // 更新中间文字
   };
 
-  // 手机端下拉框
-  var mSel = $('breedMSelect');
-  if(mSel){
-    mSel.innerHTML='<option value="">选择父本</option>';
-    var mArr = breedPool('M');
-    for(var i=0;i<mArr.length;i++){ var opt=ce('option'); opt.value=mArr[i].id; opt.textContent='第'+mArr[i].gen+'代 '+(mArr[i].name||''); if(S.selM===mArr[i].id) opt.selected=true; mSel.appendChild(opt); }
-    mSel.onchange=function(){ S.selM=this.value||null; renderList(true); updateMidInfo(); };
-  }
-  var fSel = $('breedFSelect');
-  if(fSel){
-    fSel.innerHTML='<option value="">选择母本</option>';
-    var fArr = breedPool('F');
-    for(var j=0;j<fArr.length;j++){ var opt=ce('option'); opt.value=fArr[j].id; opt.textContent='第'+fArr[j].gen+'代 '+(fArr[j].name||''); if(S.selF===fArr[j].id) opt.selected=true; fSel.appendChild(opt); }
-    fSel.onchange=function(){ S.selF=this.value||null; renderList(true); updateMidInfo(); };
-  }
+// 🌟 手机端下拉框（防呆+实时互相排斥版）
+  var refreshDropdowns = function() {
+    var mSel = $('breedMSelect');
+    if (mSel) {
+      mSel.innerHTML = '<option value="">选择父本</option>';
+      var mArr = breedPool('M');
+      for (var i = 0; i < mArr.length; i++) {
+        // 🌟 核心防呆：如果这匹马已经是母本了，别放进父本的选项里
+        if (mArr[i].id === S.selF) continue; 
+        var opt = ce('option'); opt.value = mArr[i].id; opt.textContent = '第' + mArr[i].gen + '代 ' + (mArr[i].name || '');
+        if (S.selM === mArr[i].id) opt.selected = true;
+        mSel.appendChild(opt);
+      }
+      mSel.onchange = function() {
+        S.selM = this.value || null;
+        refreshDropdowns(); // 选完立刻刷新另一个下拉框
+        renderList(true); 
+        updateMidInfo();
+      };
+    }
+
+    var fSel = $('breedFSelect');
+    if (fSel) {
+      fSel.innerHTML = '<option value="">选择母本</option>';
+      var fArr = breedPool('F');
+      for (var j = 0; j < fArr.length; j++) {
+        // 🌟 核心防呆：如果这匹马已经是父本了，别放进母本的选项里
+        if (fArr[j].id === S.selM) continue;
+        var opt = ce('option'); opt.value = fArr[j].id; opt.textContent = '第' + fArr[j].gen + '代 ' + (fArr[j].name || '');
+        if (S.selF === fArr[j].id) opt.selected = true;
+        fSel.appendChild(opt);
+      }
+      fSel.onchange = function() {
+        S.selF = this.value || null;
+        refreshDropdowns(); // 选完立刻刷新另一个下拉框
+        renderList(true); 
+        updateMidInfo();
+      };
+    }
+  };
+  
+  // 初次渲染下拉框
+  refreshDropdowns();
 
   var createAvatar = function(c) {
     var div = ce('div');
-    div.style.cssText = 'text-align:center; display:flex; flex-direction:column; align-items:center;';
+    // 让内层容器撑满，不裁切
+    div.style.cssText = 'text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; width:100%; height:100%;';
+    
     var pxb = mkPB(c);
-    pxb.style.width = '100px'; pxb.style.height = '100px'; pxb.style.paddingTop = '0';
+    // 🌟 核心修复：把 100px 改成 80px，让出空间给文字
+    pxb.style.width = '80px'; pxb.style.height = '80px'; pxb.style.paddingTop = '0'; 
     div.appendChild(pxb);
+    
     var nm = ce('div'); 
-    nm.style.cssText = 'font-size:11px; color:#ffd; margin-top:4px;';
+    // 🌟 核心修复：颜色换成变量（白天深色，晚上浅色），允许换行，居中
+    nm.style.cssText = 'font-size:11px; font-weight:bold; color:var(--page-fg); margin-top:6px; word-break:break-all; line-height:1.3; width:100%; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;';
     nm.textContent = (c.name ? '「'+c.name+'」' : '') + '第'+c.gen+'代';
+    nm.title = nm.textContent; // 鼠标悬浮看全名
     div.appendChild(nm);
+    
     return div;
   };
 
@@ -5477,11 +5635,10 @@ function mkBreedUI(){
         // ==============================
         // 3. 合并渲染 UI
         // ==============================
-        if (infoMid) {
-          infoMid.style.overflowY = 'auto'; 
-          infoMid.style.padding = '0 4px';
+          if (infoMid) {
+          infoMid.style.padding = '4px'; // 去掉 overflowY，自然撑开
           infoMid.innerHTML = 
-            '<div style="font-size:11px; line-height:1.5; text-align:center; color:var(--page-fg);">' +
+            '<div style="font-size:10px; line-height:1.3; text-align:center; color:var(--page-fg); word-break:break-all;">' +
               '<div style="margin-bottom:2px;">' + mutStr + '</div>' +
               '<div>' + inbStr + '</div>' +
             '</div>';
@@ -5540,8 +5697,9 @@ function mkBreedItem(c,selId,side,otherId){
   
   var px=ce('div');px.className='bi-px';px.appendChild(mkPB(c));d.appendChild(px);
   var inf=ce('div');inf.className='bi-info';
-  var nm=ce('div');nm.className='bi-name';var si=SX[c.sx]||SX.m;
+    var nm=ce('div');nm.className='bi-name';var si=SX[c.sx]||SX.m;
   nm.textContent=(c.name?'「'+c.name+'」· 第'+c.gen+'代':'第 '+c.gen+' 代')+' '+si.s;
+  nm.title = nm.textContent; // 🌟 鼠标放上去看全名
   inf.appendChild(nm);
   var meta=ce('div');meta.className='bi-meta';
   
@@ -6061,4 +6219,16 @@ function getWeekNumber() {
   d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
   var week1 = new Date(d.getFullYear(), 0, 4);
   return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+function useMagicFlower(id) {
+  var c = findC(id);
+  if (!c || !c.sterile || !c.doubleWomb || c.infiniteBreed) return;
+  if (S.magicFlower <= 0) return alert('你没有魔法花！');
+  
+  if (!confirm('🌸 确定要对这匹马使用魔法花吗？\n它将打破不育的诅咒，获得无限的繁育次数。')) return;
+  
+  S.magicFlower--;
+  c.infiniteBreed = true;
+  sv(); closeM(); render();
+  showToast('🌸 魔法花绽放了！它获得了无限的繁育之力！');
 }

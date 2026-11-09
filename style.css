@@ -1005,14 +1005,15 @@ button:disabled {
   box-sizing: border-box;
 }
 #breedMidInfo {
-  height: 60px;
+  min-height: 50px;
+  height: auto;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
   text-align: center;
+  margin-bottom: 8px; /* 给下面按钮留点空隙 */
 }
 #breedGoBtn {
   width: 100%;
@@ -1254,6 +1255,13 @@ button:disabled {
   .pc-only { display: none !important; }
   .mobile-only { display: flex !important; }
   .breed-wrap { flex-direction: column; }
+
+  @media (max-width: 768px) {
+  .breed-center-col {
+    height: auto !important; /* 手机端取消固定高度，让它自然撑开 */
+    min-height: 160px;
+  }
+}
 
   .mdc {
     width: 92% !important;
